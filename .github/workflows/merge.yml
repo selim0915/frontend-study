@@ -13,7 +13,6 @@ jobs:
   build:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    environment: devProject
 
     strategy:
       matrix:
@@ -33,9 +32,11 @@ jobs:
       run: npm ci
 
     - run: npm run start
-    - run: echo "token=$PROJECT_TOKEN"
-      env:
+    - env:
         PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-    - run: npm run env
-      env:
+      run: echo "token=$PROJECT_TOKEN"
+      
+    - env:
         PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      run: npm run env
+      
