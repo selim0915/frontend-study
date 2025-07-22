@@ -33,6 +33,9 @@ jobs:
       run: npm ci
 
     - run: npm run start
+    - run: echo "token=$PROJECT_TOKEN"
+      env:
+        PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     - run: npm run env
       env:
         PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
