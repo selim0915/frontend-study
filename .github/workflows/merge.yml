@@ -26,3 +26,5 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm -v
+    - run: npm run start
+    - run: npm run env
