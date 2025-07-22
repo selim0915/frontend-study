@@ -6,7 +6,7 @@ name: Node.js CI
 on:
   pull_request:
     types: [closed]
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"]
   workflow_dispatch:
 
 jobs:
@@ -19,16 +19,18 @@ jobs:
         node-version: [18.19.0]
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
     
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Setup Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
     
-    - run: npm ci
-    - run: npm -v
+    - name: Install dependencies
+      run: npm ci
+
     - run: npm run start
     - run: npm run env
       env:
