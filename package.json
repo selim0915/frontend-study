@@ -5,9 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "echo \"Server Start\"",
-    "env": "echo \"token=$PROJECT_TOKEN\""
+    "env": "cross-env echo \"token=$PROJECT_TOKEN\""
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "cross-env": "^7.0.3"
+  }
 }
