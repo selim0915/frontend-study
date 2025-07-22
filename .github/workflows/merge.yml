@@ -4,13 +4,14 @@
 name: Node.js CI
 
 on:
-  push:
-    branches: [ "main", "dev" ]
   pull_request:
+    types: [closed]
     branches: [ "main", "dev" ]
+  workflow_dispatch:
 
 jobs:
   build:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     strategy:
@@ -19,12 +20,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+    
     - run: npm ci
     - run: npm -v
     - run: npm run start
     - run: npm run env
+      env:
+        PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
