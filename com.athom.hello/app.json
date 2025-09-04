@@ -86,6 +86,19 @@
           "en": "Log something to the console"
         },
         "id": "log-something-to-the-console"
+      },
+      {
+        "id": "blink-the-light",
+        "title": {
+          "en": "Blink the light"
+        },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=light-bulb"
+          }
+        ]
       }
     ]
   },

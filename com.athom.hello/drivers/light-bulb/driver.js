@@ -7,6 +7,11 @@ module.exports = class MyDriver extends Homey.Driver {
    */
   async onInit() {
     this.log('MyDriver has been initialized');
+
+    const card = this.homey.flow.getActionCard('blink-the-light');
+    card.registerRunListener(async (args, state) => {
+        await args.device.blink();
+    });
   }
 
   /**

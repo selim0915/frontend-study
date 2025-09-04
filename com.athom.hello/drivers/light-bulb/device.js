@@ -29,6 +29,10 @@ module.exports = class MyDevice extends Homey.Device {
     // this.setUnavailable(this.homey.__('device_unavailable')).catch( this.error );
   }
 
+  async blink() {
+    this.log('Blink the light bulb');
+  }
+
   /**
    * onAdded is called when the user adds the device, called just after pairing.
    */

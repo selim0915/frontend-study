@@ -1,0 +1,10 @@
+{
+  "actions": [
+    {
+      "id": "blink-the-light",
+      "title": {
+        "en": "Blink the light"
+      }
+    }
+  ]
+}

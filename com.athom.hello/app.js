@@ -14,12 +14,12 @@ class MyApp extends Homey.App {
     
     // Trigger 5초마다 카드 실행 예시
     const cardTriggerExample = this.homey.flow.getTriggerCard('trigger-example');
-    setInterval(()=>{
+    // setInterval(()=>{
       console.log('Trigger the flow card');
       cardTriggerExample.trigger({
         'random-number': Math.round(Math.random()*100)
       });
-    }, 5000)
+    // }, 5000)
 
     // condition 자바스크립트 추가
     const cardConditionMonday = this.homey.flow.getConditionCard('its-a-monday');
