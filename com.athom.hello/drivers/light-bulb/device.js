@@ -6,7 +6,27 @@ module.exports = class MyDevice extends Homey.Device {
    * onInit is called when the device is initialized.
    */
   async onInit() {
-    this.log('MyDevice has been initialized');
+    this.log('LigntBulb MyDevice has been initialized');
+    
+    this.registerCapabilityListener('onoff', async (value) => {
+      this.log('MyDevice on/off :', value);
+    });
+
+    this.registerCapabilityListener('dim', async (value) => {
+      this.log('MyDevice dim :', value);
+    }); 
+
+    // 예시로 5초마다 onoff 토글 예시
+    // serInterval( () => {
+    //   this.setCapabilityValue('onoff', true).catch( this.error );
+
+    //   setTimeout( () => {
+    //     this.setCapabilityValue('onoff', false).catch( this.error );
+    //   }, 2500)
+    // }, 5000)
+
+    // 오류날 경우 보여줄 텍스트 예시
+    // this.setUnavailable(this.homey.__('device_unavailable')).catch( this.error );
   }
 
   /**
