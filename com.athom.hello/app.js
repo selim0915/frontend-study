@@ -11,6 +11,37 @@ class MyApp extends Homey.App {
     // sdk와 통신
     this.log('MyApp has been initialized');
 
+    
+    // Trigger 5초마다 카드 실행 예시
+    const cardTriggerExample = this.homey.flow.getTriggerCard('trigger-example');
+    setInterval(()=>{
+      console.log('Trigger the flow card');
+      cardTriggerExample.trigger({
+        'random-number': Math.round(Math.random()*100)
+      });
+    }, 5000)
+
+    // condition 자바스크립트 추가
+    const cardConditionMonday = this.homey.flow.getConditionCard('its-a-monday');
+    cardConditionMonday.registerRunListener(async (args, state) => {
+      const today = new Date();
+      console.log(today);
+
+      return today.getDay() === 1; // 월요일인지 확인
+    });
+
+    // action log 자바스크립트 추가
+    const cardActionLog = this.homey.flow.getActionCard('log');
+    cardActionLog.registerRunListener(async (args, state) => {
+
+      // throw new Error('OoPS!');
+
+      const { usertext } = args;
+      this.log(`the user logs : ${usertext}`);
+
+      return true;
+    });
+
     // flow 자바스크립트 추가
     const card = this.homey.flow.getActionCard('log-something-to-the-console');
     card.registerRunListener(async (args, state) => {

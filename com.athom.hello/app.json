@@ -31,7 +31,56 @@
   },
   "support": "https://example.com/support",
   "flow": {
+    "triggers": [
+      {
+        "title": {
+          "en": "This caed has been triggered"
+        },
+        "hint": {
+          "en": "This card will start every five seconds."
+        },
+        "tokens": [
+          {
+            "type": "number",
+            "name": "random-number",
+            "title": {
+              "en": "Random Number"
+            },
+            "example": {
+              "en": "13"
+            }
+          }
+        ],
+        "id": "trigger-example"
+      }
+    ],
+    "conditions": [
+      {
+        "title": {
+          "en": "It's !{{a|not a}} Monday"
+        },
+        "id": "its-a-monday"
+      }
+    ],
     "actions": [
+      {
+        "title": {
+          "en": "Log something to the console"
+        },
+        "titleFormatted": {
+          "en": "Log [[usertext]] to the console"
+        },
+        "args": [
+          {
+            "type": "text",
+            "name": "usertext",
+            "placeholder": {
+              "en": "Type some text"
+            }
+          }
+        ],
+        "id": "log"
+      },
       {
         "title": {
           "en": "Log something to the console"

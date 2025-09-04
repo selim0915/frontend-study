@@ -1,0 +1,17 @@
+{
+  "title": {
+    "en": "Log something to the console"
+  },
+  "titleFormatted": {
+    "en": "Log [[usertext]] to the console"
+  },
+  "args": [
+    {
+      "type": "text",
+      "name": "usertext",
+      "placeholder": {
+        "en": "Type some text"
+      }
+    }
+  ]
+}

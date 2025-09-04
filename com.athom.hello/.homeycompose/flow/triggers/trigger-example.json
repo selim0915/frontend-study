@@ -1,0 +1,20 @@
+{
+  "title": {
+    "en": "This caed has been triggered"
+  },
+  "hint": {
+    "en": "This card will start every five seconds."
+  },
+  "tokens": [
+    {
+      "type": "number",
+      "name": "random-number",
+      "title": {
+        "en": "Random Number"
+      },
+      "example": {
+        "en": "13"
+      }
+    }
+  ]
+}
