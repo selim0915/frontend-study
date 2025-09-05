@@ -1,12 +1,49 @@
-<div id="login-container" style="margin:20px;">
-  <label>ID: <input id="userid" type="text"></label><br><br>
-  <label>PW: <input id="userpw" type="password"></label><br><br>
-  <button id="loginBtn">로그인</button>
-</div>
+
+<style type="text/css">
+  #hy-header {
+    display: none !important;
+  }
+  .welcome-logos {
+    width: 150px;
+  }
+  .center {
+    text-align: center;
+    width: 100%;
+  }
+</style>
+
+<body>
+  <header class="homey-header">
+    <h1 class="homey-title" data-i18n="pair.title"></h1>
+    <p class="homey-subtitle" data-i18n="pair.subtitle"></p>
+  </header>
+
+  
+  <div class="driver-icon-wrapper" style="display:flex; justify-content:center; margin-bottom:20px;">
+    <img class="welcome-logos" src="../assets/images/logo.png" alt="Welcome Logo">
+  </div>
+
+  <form class="homey-form">
+    <fieldset class="homey-form-fieldset">
+      <legend class="homey-form-legend">Login</legend>
+
+      <div class="homey-form-group">
+        <label class="homey-form-label" for="userid">ID</label>
+        <input class="homey-form-input" id="userid" type="text" value=""/>
+      </div>
+
+      <div class="homey-form-group">
+        <label class="homey-form-label" for="userpw">PW</label>
+        <input class="homey-form-input" id="userpw" type="password" value=""/>
+      </div>
+
+      <button id="loginBtn" class="homey-button-primary center">로그인 하기</button>
+    </fieldset>
+  </form>
+</body>
 
 <script type="application/javascript">
-  Homey.setTitle(Homey.__("pair.title"));
-  Homey.setSubtitle(Homey.__("pair.subtitle"));
+  Homey.setTitle('');
 
   document.getElementById("loginBtn").addEventListener("click", function () {
     const id = document.getElementById("userid").value.trim();
@@ -19,16 +56,4 @@
       Homey.alert("ID 또는 PW가 올바르지 않습니다.");
     }
   });
-
-  // Homey.emit("my_event", { foo: "bar" }).then(function (result) {
-  //   console.log(result); // result is: Hello!
-  // });
-
-  // Homey.on("hello", function (message) {
-  //   Homey.alert(message); // Hello to you!
-  //   return "Hi!"; // send a reply back to the pairing session
-
-  //   // you can return a promise if you need to do some async
-  //   // work before replying to the message.
-  // });
 </script>
