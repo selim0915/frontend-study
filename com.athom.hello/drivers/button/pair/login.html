@@ -1,0 +1,34 @@
+<div id="login-container" style="margin:20px;">
+  <label>ID: <input id="userid" type="text"></label><br><br>
+  <label>PW: <input id="userpw" type="password"></label><br><br>
+  <button id="loginBtn">로그인</button>
+</div>
+
+<script type="application/javascript">
+  Homey.setTitle(Homey.__("pair.title"));
+  Homey.setSubtitle(Homey.__("pair.subtitle"));
+
+  document.getElementById("loginBtn").addEventListener("click", function () {
+    const id = document.getElementById("userid").value.trim();
+    const pw = document.getElementById("userpw").value.trim();
+
+    if (id === "user" && pw === "1234") {
+      Homey.showView("add_devices");
+    } else {
+      // 로그인 실패 → 경고창
+      Homey.alert("ID 또는 PW가 올바르지 않습니다.");
+    }
+  });
+
+  // Homey.emit("my_event", { foo: "bar" }).then(function (result) {
+  //   console.log(result); // result is: Hello!
+  // });
+
+  // Homey.on("hello", function (message) {
+  //   Homey.alert(message); // Hello to you!
+  //   return "Hi!"; // send a reply back to the pairing session
+
+  //   // you can return a promise if you need to do some async
+  //   // work before replying to the message.
+  // });
+</script>

@@ -19,13 +19,13 @@ module.exports = class MyDriver extends Homey.Driver {
   async onPairListDevices() {
     this.log('onPairListDevices called');
 
+    // session.setHandler("my_event", async function (data) {
+    //   // data is { 'foo': 'bar' }
+    //   return "Hello!";
+    // });
+    
     return [
-      {
-        name: 'My Button',
-        data: {
-          id: 'my-device-002',
-        },
-      },
+      { name: 'My Button', data: { id: 'my-device-002' } },
     ];
   }
 

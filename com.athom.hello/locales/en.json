@@ -1,3 +1,7 @@
 {
-  "device_unavailable": "Cannot reach thr device on the local Wi-Fi network."
+  "device_unavailable": "Cannot reach thr device on the local Wi-Fi network.",
+  "pair": {
+    "title": "Sign in",
+    "subtitle": "Please log in"
+  }
 }

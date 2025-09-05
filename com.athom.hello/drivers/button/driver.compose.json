@@ -21,8 +21,11 @@
       "id": "list_devices",
       "template": "list_devices",
       "navigation": {
-        "next": "add_devices"
+        "next": "login"
       }
+    },
+    {
+      "id": "login"
     },
     {
       "id": "add_devices",

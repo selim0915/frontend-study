@@ -11,6 +11,9 @@ class MyApp extends Homey.App {
     // sdk와 통신
     this.log('MyApp has been initialized');
 
+    // 앱설정
+    const username = this.homey.settings.get('username');
+
     
     // Trigger 5초마다 카드 실행 예시
     const cardTriggerExample = this.homey.flow.getTriggerCard('trigger-example');
