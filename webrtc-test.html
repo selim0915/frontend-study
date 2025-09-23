@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WebRTC Minimal Test</title>
+</head>
+<body>
+  <h2>WebRTC Local Test</h2>
+  <video id="localVideo" autoplay playsinline muted></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <br/>
+
+  <textarea id="offer" placeholder="Offer / Answer" cols="50" rows="6"></textarea><br>
+  <button id="createOffer">Create Offer</button>
+  <button id="createAnswer">Create Answer</button>
+  <button id="setAnswer">Set Remote Answer</button>
+
+  <script>
+    let pc = new RTCPeerConnection();
+    let localStream;
+
+    // 로컬 미디어 가져오기
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        document.getElementById("localVideo").srcObject = stream;
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      });
+
+    // 원격 스트림 표시
+    pc.ontrack = e => {
+      document.getElementById("remoteVideo").srcObject = e.streams[0];
+    };
+
+    // Offer 생성
+    document.getElementById("createOffer").onclick = async () => {
+      let offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      document.getElementById("offer").value = JSON.stringify(offer);
+    };
+
+    // Answer 생성
+    document.getElementById("createAnswer").onclick = async () => {
+      let offer = JSON.parse(document.getElementById("offer").value);
+      await pc.setRemoteDescription(offer);
+      let answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      document.getElementById("offer").value = JSON.stringify(answer);
+    };
+
+    // Answer 적용
+    document.getElementById("setAnswer").onclick = async () => {
+      let answer = JSON.parse(document.getElementById("offer").value);
+      await pc.setRemoteDescription(answer);
+      alert("Remote Answer set!");
+    };
+  </script>
+</body>
+</html>
