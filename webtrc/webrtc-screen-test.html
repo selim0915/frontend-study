@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WebRTC Screen Share Test</title>
+</head>
+<body>
+  <h2>WebRTC Screen Sharing</h2>
+  <video id="localVideo" autoplay playsinline muted></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <br/>
+
+  <textarea id="offer" placeholder="Offer / Answer" cols="50" rows="6"></textarea><br>
+  <button id="shareScreen">Share Screen</button>
+  <button id="createOffer">Create Offer</button>
+  <button id="createAnswer">Create Answer</button>
+  <button id="setAnswer">Set Remote Answer</button>
+
+  <script>
+    let pc = new RTCPeerConnection();
+    let localStream;
+
+    // 화면 공유 시작
+    document.getElementById("shareScreen").onclick = async () => {
+      try {
+        localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        document.getElementById("localVideo").srcObject = localStream;
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        console.log("Screen sharing started:", localStream);
+      } catch(e) {
+        alert("화면 공유 실패: " + e.message);
+      }
+    };
+
+    // 원격 스트림 표시
+    pc.ontrack = e => {
+      console.log("Remote track received", e.streams[0]);
+
+      document.getElementById("remoteVideo").srcObject = e.streams[0];
+    };
+
+    // ICE 상태 로그
+    pc.oniceconnectionstatechange = () => {
+      console.log("ICE state:", pc.iceConnectionState);
+    };
+
+    // Offer 생성
+    document.getElementById("createOffer").onclick = async () => {
+      let offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      document.getElementById("offer").value = JSON.stringify(offer);
+    };
+
+    // Answer 생성
+    document.getElementById("createAnswer").onclick = async () => {
+      let offer = JSON.parse(document.getElementById("offer").value);
+      await pc.setRemoteDescription(offer);
+      let answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      document.getElementById("offer").value = JSON.stringify(answer);
+    };
+
+    // Answer 적용
+    document.getElementById("setAnswer").onclick = async () => {
+      let answer = JSON.parse(document.getElementById("offer").value);
+      await pc.setRemoteDescription(answer);
+      
+      alert("Remote Answer set!");
+    };
+  </script>
+</body>
+</html>

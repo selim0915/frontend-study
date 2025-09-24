@@ -1,7 +1,7 @@
 {
   "name": "frontend-study",
   "version": "1.0.0",
-  "description": "",
+  "description": "[![Node.js CI](https://github.com/selim0915/frontend-study/actions/workflows/merge.yml/badge.svg?event=push)](https://github.com/selim0915/frontend-study/actions/workflows/merge.yml)",
   "main": "index.js",
   "scripts": {
     "start": "echo \"Server Start\"",
@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "express": "^5.1.0"
   }
 }
