@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P WebRTC Demo</title>
+    <style>
+      body { font-family: monospace; text-align: center; margin: 20px; }
+      video { width: 45%; height: auto; background: #2c3e50; }
+      #buttons { margin-top: 10px; }
+    </style>
+    </head>
+  <body>
+    <h3>Local Stream</h3>
+    <video id="localVideo" autoplay playsinline muted></video>
+
+    <h3>Remote Stream</h3>
+    <video id="remoteVideo" autoplay playsinline></video>
+
+    <div id="buttons">
+      <button id="startWebcam">Start Webcam</button>
+      <button id="createCall">Create Call (offer)</button>
+      <textarea id="sdpBox" rows="10" cols="50" placeholder="SDP / ICE info"></textarea>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-database-compat.js"></script>
+    <script type="module" src="p2p-webrtc.js"></script>
+    <script type="module" src="src/firebase/firebase.js"></script>
+  </body>
+</html>
