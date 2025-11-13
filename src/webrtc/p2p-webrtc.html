@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +7,7 @@
     <style>
       body { font-family: monospace; text-align: center; margin: 20px; }
       video { width: 45%; height: auto; background: #2c3e50; }
+      textarea { width: 90%; height: 100px; margin-top: 10px; }
       #buttons { margin-top: 10px; }
     </style>
     </head>
@@ -18,14 +19,37 @@
     <video id="remoteVideo" autoplay playsinline></video>
 
     <div id="buttons">
-      <button id="startWebcam">Start Webcam</button>
-      <button id="createCall">Create Call (offer)</button>
-      <textarea id="sdpBox" rows="10" cols="50" placeholder="SDP / ICE info"></textarea>
+      <button id="startWebcam">🎥 Start Webcam</button>
+      <button id="createCall">📞 Create Call (Offer)</button>
+      <button id="joinCall">✅ Join Call (Answer)</button>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-database-compat.js"></script>
+    <textarea id="callIdBox" placeholder="Call ID will appear here..."></textarea>
+
+    <textarea values="ode server.js로 HTTPS 서버 실행"></textarea>
+
+    <h2>WebRTC 테스트 가이드</h2>
+    <ol style="text-align: left;">
+      <li>
+        <strong>HTTPS 서버 실행</strong>
+        <p>터미널에서 node server.js 실행</p>
+      </li>
+
+      <li>
+        <strong>브라우저 2개에서 접속</strong>
+        <ul>
+          <li>https://192.168.2.95:3000/src/webrtc/p2p-webrtc.html</li>
+          <li>브라우저 A : Start Webcam → Create Call → Call ID 확인</li>
+          <li>브라우저 B : Start Webcam → Join Call → Call ID 입력</li>
+        </ul>
+      </li>
+
+      <li>
+        <strong>연결 확인</strong>
+        <p>두 브라우저 간 WebRTC 영상/음성 연결 확인</p>
+      </li>
+    </ol>
+
     <script type="module" src="p2p-webrtc.js"></script>
-    <script type="module" src="src/firebase/firebase.js"></script>
   </body>
 </html>

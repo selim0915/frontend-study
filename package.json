@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "echo \"Server Start\"",
+    "dev": "webpack serve --open",
     "env": "cross-env echo \"token=$PROJECT_TOKEN\""
   },
   "keywords": [],
@@ -14,5 +15,12 @@
     "cross-env": "^7.0.3",
     "express": "^5.1.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "babel-loader": "^10.0.0",
+    "html-webpack-plugin": "^5.6.4",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2"
   }
 }
