@@ -4,8 +4,11 @@
   "description": "[![Node.js CI](https://github.com/selim0915/frontend-study/actions/workflows/merge.yml/badge.svg?event=push)](https://github.com/selim0915/frontend-study/actions/workflows/merge.yml)",
   "main": "index.js",
   "scripts": {
-    "start": "echo \"Server Start\"",
+    "build": "webpack --mode production",
     "dev": "webpack serve --open",
+    "start": "node server/http-server.js",
+    "wss": "node server/ws-server.js",
+    "prod:webrtc": "npm run build && powershell -Command \"Start-Process node -ArgumentList 'server/http-server.js'; Start-Process node -ArgumentList 'server/ws-server.js'\"",
     "env": "cross-env echo \"token=$PROJECT_TOKEN\""
   },
   "keywords": [],
@@ -17,6 +20,8 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
     "babel-loader": "^10.0.0",
     "html-webpack-plugin": "^5.6.4",
     "webpack": "^5.102.1",

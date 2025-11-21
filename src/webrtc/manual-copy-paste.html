@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Minimal WebRTC (Manual Offer/Answer)</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    video { width: 45%; background: #222; margin: 5px; }
+    textarea { width: 100%; height: 120px; margin: 6px 0; font-family: monospace; }
+    button { margin: 4px 6px 4px 0; }
+    .row { display: flex; gap: 10px; align-items: flex-start; }
+    .col { flex: 1; }
+  </style>
+</head>
+<body>
+  <h2>Minimal WebRTC 수동 복붙 테스트</h2>
+
+  <!-- WebSocket signaling controls -->
+  <div style="margin: 12px 0; padding: 10px; border: 1px solid #ddd;">
+    <h3>Signaling (WebSocket)</h3>
+    <label>
+      WS URL:
+      <input id="wsUrl" type="text" style="width: 360px;"
+             value="wss://localhost:3001" />
+    </label>
+    <button id="connectWs">🔌 Connect WS</button>
+    <button id="disconnectWs">❌ Disconnect WS</button>
+    <span id="wsStatus" style="margin-left: 10px; color: red;">disconnected</span>
+    <p style="margin-top: 6px;">
+      연결 시 Offer/Answer/ICE 후보가 자동 전송/수신됩니다. 미연결 시 수동 복사/붙여넣기를 사용하세요.
+    </p>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h3>Local</h3>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <div class="col">
+      <h3>Remote</h3>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+
+  <div>
+    <button id="startCamera">🎥 Start Camera</button>
+    <button id="createOffer">📨 Create Offer</button>
+    <button id="createAnswer">✅ Create Answer</button>
+    <button id="setRemoteAnswer">📥 Set Remote Answer</button>
+  </div>
+
+  <h3>SDP (Offer/Answer 교환용)</h3>
+  <textarea id="sdpBox" placeholder="여기에 Offer 혹은 Answer를 JSON 그대로 붙여넣거나, 여기서 복사하여 상대에게 전달"></textarea>
+
+  <h3>ICE Candidates</h3>
+  <p>아래 Local ICE 후보가 자동으로 채워집니다. 각 줄을 복사하여 상대에게 전달하세요.</p>
+  <textarea id="localCandidatesBox" placeholder="Local ICE candidates가 한 줄씩 추가됩니다."></textarea>
+
+  <h3>Remote ICE Candidates</h3>
+  <div>
+    <button id="addRemoteCandidates">➕ Add Remote ICE Candidates</button>
+  </div>
+  <textarea id="remoteCandidatesBox" placeholder="상대에게서 받은 ICE candidate들을 한 줄씩 붙여넣으세요."></textarea>
+
+  <script>
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    const startBtn = document.getElementById('startCamera');
+    const createOfferBtn = document.getElementById('createOffer');
+    const createAnswerBtn = document.getElementById('createAnswer');
+    const setRemoteAnswerBtn = document.getElementById('setRemoteAnswer');
+    const addRemoteCandidatesBtn = document.getElementById('addRemoteCandidates');
+
+    const sdpBox = document.getElementById('sdpBox');
+    const localCandidatesBox = document.getElementById('localCandidatesBox');
+    const remoteCandidatesBox = document.getElementById('remoteCandidatesBox');
+
+    let pc;
+    let localStream;
+
+    const configuration = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
+
+    // WebSocket signaling
+    let connectWsBtn, disconnectWsBtn, wsStatusSpan, wsUrlInput;
+    let ws = null;
+
+    function setWsStatus(connected) {
+      wsStatusSpan.textContent = connected ? 'connected' : 'disconnected';
+      wsStatusSpan.style.color = connected ? 'green' : 'red';
+    }
+
+    // DOM이 준비된 후에 요소 선택 및 이벤트 바인딩
+    window.addEventListener('DOMContentLoaded', () => {
+      connectWsBtn = document.getElementById('connectWs');
+      disconnectWsBtn = document.getElementById('disconnectWs');
+      wsStatusSpan = document.getElementById('wsStatus');
+      wsUrlInput = document.getElementById('wsUrl');
+    
+      connectWsBtn.onclick = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+        try {
+          const targetUrl = (wsUrlInput.value || '').trim() || `wss://${location.host}`;
+          ws = new WebSocket(targetUrl);
+          ws.onopen = () => setWsStatus(true);
+          ws.onclose = () => setWsStatus(false);
+          ws.onerror = () => setWsStatus(false);
+    
+          ws.onmessage = async (msg) => {
+            try {
+              const data = JSON.parse(msg.data);
+              ensurePC();
+              if (data.type === 'offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
+                } else {
+                  sdpBox.value = JSON.stringify(pc.localDescription);
+                }
+              }
+              if (data.type === 'answer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+              }
+              if (data.type === 'candidate') {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                } catch (err) {
+                  console.error('Error adding ICE candidate:', err);
+                }
+              }
+            } catch (e) {
+              console.error('WS message handling error:', e);
+            }
+          };
+        } catch (e) {
+          alert('WS 연결 실패: ' + e.message);
+        }
+      };
+    
+      disconnectWsBtn.onclick = () => {
+        if (ws) {
+          try { ws.close(); } catch {}
+          ws = null;
+          setWsStatus(false);
+        }
+      };
+    });
+
+    function ensurePC() {
+      if (!pc) {
+        pc = new RTCPeerConnection(configuration);
+
+        const remoteStream = new MediaStream();
+        remoteVideo.srcObject = remoteStream;
+        pc.ontrack = (event) => {
+          event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
+        };
+
+        // 로컬 ICE 후보: 수동 텍스트 + WS 전송 병행
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            // 수동 교환을 위한 텍스트 누적
+            localCandidatesBox.value += JSON.stringify(event.candidate) + '\n';
+            // WS 연결 시 자동 전송
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+            }
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          console.log('ICE state:', pc.iceConnectionState);
+        };
+      }
+    }
+
+    // 카메라 시작
+    startBtn.onclick = async () => {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        ensurePC();
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      } catch (e) {
+        alert('카메라 시작 실패: ' + e.message);
+      }
+    };
+
+    // Offer 생성: 수동/WS 병행
+    createOfferBtn.onclick = async () => {
+      try {
+        ensurePC();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+    
+        // 항상 텍스트 박스에 채우기
+        sdpBox.value = JSON.stringify(pc.localDescription);
+    
+        // WS 연결되어 있으면 추가로 전송
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
+        }
+      } catch (e) {
+        alert('Offer 생성 실패: ' + e.message);
+      }
+    };
+
+    // Answer 생성: 수동/WS 병행
+    createAnswerBtn.onclick = async () => {
+      try {
+        ensurePC();
+        const remoteOffer = JSON.parse(sdpBox.value.trim());
+        await pc.setRemoteDescription(new RTCSessionDescription(remoteOffer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+    
+        // 항상 텍스트 박스에 채우기
+        sdpBox.value = JSON.stringify(pc.localDescription);
+    
+        // WS 연결되어 있으면 추가로 전송
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
+        }
+      } catch (e) {
+        alert('Answer 생성 실패: ' + e.message);
+      }
+    };
+
+    // Remote Answer 수동 적용
+    setRemoteAnswerBtn.onclick = async () => {
+      try {
+        const remoteAnswer = JSON.parse(sdpBox.value.trim());
+        await pc.setRemoteDescription(new RTCSessionDescription(remoteAnswer));
+        alert('Remote Answer 적용 완료!');
+      } catch (e) {
+        alert('Remote Answer 적용 실패: ' + e.message);
+      }
+    };
+
+    // Remote ICE candidates 수동 적용
+    addRemoteCandidatesBtn.onclick = async () => {
+      try {
+        const lines = remoteCandidatesBox.value
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => !!l);
+
+        for (const line of lines) {
+          const candidateObj = JSON.parse(line);
+          await pc.addIceCandidate(new RTCIceCandidate(candidateObj));
+        }
+        alert('Remote ICE candidates 적용 완료!');
+      } catch (e) {
+        alert('ICE candidates 적용 실패: ' + e.message);
+      }
+    };
+  </script>
+</body>
+</html>

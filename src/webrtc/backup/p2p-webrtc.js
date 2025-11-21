@@ -1,4 +1,4 @@
-import { db, doc } from "../firebase/firebase.js";
+import { db, doc } from "../../firebase/firebase.js";
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
