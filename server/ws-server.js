@@ -2,14 +2,12 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
+const { loadSSL } = require("../config/ssl");
 
 const PORT = 3001;
 
-// 인증서 로드 (프로젝트 루트 기준으로 수정)
-const server = https.createServer({
-  key: fs.readFileSync(path.join(__dirname, "..", "cert/key.pem")),
-  cert: fs.readFileSync(path.join(__dirname, "..", "cert/cert.pem"))
-});
+// HTTPS 서버 생성
+const server = https.createServer(loadSSL());
 
 // WebSocket 전용 서버 (정적 파일 서빙 없음)
 const wss = new WebSocket.Server({ server });
