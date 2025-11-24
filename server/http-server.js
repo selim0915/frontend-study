@@ -10,10 +10,7 @@ const PORT = 3000;
 const server = https.createServer(loadSSL(), app);
 
 // 정적 파일 서빙 (프로젝트 루트 기준)
-app.use(express.static(path.join(__dirname, "..", "dist")));
-
-// src 경로도 정적 서빙 (WebRTC 샘플 HTML 접근 허용)
-app.use("/src", express.static(path.join(__dirname, "..", "src")));
+app.use(express.static(path.join(__dirname, "../dist")));
 
 server.listen(PORT, () => {
   console.log(`HTTPS web server running at https://localhost:${PORT}`);

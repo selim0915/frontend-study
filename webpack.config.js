@@ -1,13 +1,18 @@
 const path = require("path");
 const webpack = require("webpack");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   mode: "development",
-  entry: "./src/index.js",
+  entry: {
+    main: "./src/index.js",
+  },
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "bundle.js",
+    publicPath: '/',
+    clean: true,
   },
   plugins: [
     new webpack.DefinePlugin({
@@ -18,14 +23,20 @@ module.exports = {
       template: path.resolve(__dirname, './public', 'index.html'),
       filename: 'index.html'
     }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: path.resolve(__dirname, 'src/webrtc'), to: 'src/webrtc' },
+        { from: path.resolve(__dirname, 'src/common'), to: 'src/common' },
+      ],
+    }),
   ],
   devtool: "source-map",
   devServer: {
-    port: 3000,
+    port: 3002,
     server: { type: 'https' },
     static: [
       { directory: path.join(__dirname, "public"), publicPath: '/' },
-      { directory: path.join(__dirname, "src"), publicPath: '/src' }, // /src도 정적 서빙
+      { directory: path.join(__dirname, "src"), publicPath: '/src' },
     ],
     historyApiFallback: true,
   },

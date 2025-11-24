@@ -1,66 +1,78 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <title>Minimal WebRTC (Manual Offer/Answer)</title>
-  <style>
-    body { font-family: sans-serif; margin: 20px; }
-    video { width: 45%; background: #222; margin: 5px; }
-    textarea { width: 100%; height: 120px; margin: 6px 0; font-family: monospace; }
-    button { margin: 4px 6px 4px 0; }
-    .row { display: flex; gap: 10px; align-items: flex-start; }
-    .col { flex: 1; }
-  </style>
+  <script src="/src/common/set-title.js"></script>
+  <link rel="stylesheet" href="/src/webrtc/minimal-copy-paste.css">
 </head>
 <body>
-  <h2>Minimal WebRTC 수동 복붙 테스트</h2>
+  <h2>Minimal WebRTC 테스트</h2>
+  <p class="sub-text">
+    Signaling (WebSocket) 연결 시 Offer/Answer/ICE 후보가 자동 전송/수신됩니다. 미연결 시 수동 복사/붙여넣기를 사용하세요.
+  </p>
+
+  <!-- UI/UX 기본 요소 -->
+  <div>
+    <div class="row">
+      <div class="col">
+        <h3>Local</h3>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
+      <div class="col">
+        <h3>Remote</h3>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="startCamera">🎥 Start Camera</button>
+    </div>
+  </div>
 
   <!-- WebSocket signaling controls -->
-  <div style="margin: 12px 0; padding: 10px; border: 1px solid #ddd;">
-    <h3>Signaling (WebSocket)</h3>
+  <div class="panel">
+    <h3>WebSocket signaling</h3>
+
     <label>
       WS URL:
-      <input id="wsUrl" type="text" style="width: 360px;"
-             value="wss://localhost:3001" />
+      <input id="wsUrl" type="text" style="width: 360px;" value="wss://localhost:3001" />
     </label>
     <button id="connectWs">🔌 Connect WS</button>
     <button id="disconnectWs">❌ Disconnect WS</button>
-    <span id="wsStatus" style="margin-left: 10px; color: red;">disconnected</span>
-    <p style="margin-top: 6px;">
-      연결 시 Offer/Answer/ICE 후보가 자동 전송/수신됩니다. 미연결 시 수동 복사/붙여넣기를 사용하세요.
+    <span id="wsStatus">disconnected</span>
+  </div>
+
+  <!-- 수동 WebRTC 연결 -->
+  <div class="panel">
+    <h3>수동 WebRTC 연결</h3>
+    <p class="sub-text">
+      - A에서 “Create Offer” 클릭 → A의 SDP에 Offer 텍스트 생성<br/>
+      - A의 SDP Offer 텍스트를 B의 SDP에 붙여넣고 “Create Answer” 클릭 → B의 SDP에 Answer 텍스트 생성<br/>
+      - B의 SDP Answer 텍스트를 A의 SDP에 붙여넣고 “Set Remote Answer” 클릭 → A의 ICE Candidates에 텍스트 생성<br/>
+      - A의 ICE Candidates 텍스트를 복사 → B의 Remote ICE Candidates에 붙여넣고 “Add Remote ICE Candidates” 클릭<br/>
     </p>
-  </div>
 
-  <div class="row">
-    <div class="col">
-      <h3>Local</h3>
-      <video id="localVideo" autoplay playsinline muted></video>
+    <div class="row">
+      <button id="createOffer" title="RTCPeerConnection을 만들고, 내 연결 저장를 담은 Offer(SDP)를 생성해 상대에게 보내기 위한 이벤트">Create Offer</button>
+      <button id="createAnswer" title="상대가 보낸 Offer를 받아서, 내가 연결할 준비가 되었다는 Answer(SDP)를 생성하는 이벤트">Create Answer</button>
+      <button id="setRemoteAnswer" title="상대가 보낸 Answer(SDP)를 내 RTCPeerConnection에 적용하는 이벤트">Set Remote Answer</button>
+      <button id="addRemoteCandidates">Add Remote ICE Candidates</button>
     </div>
-    <div class="col">
-      <h3>Remote</h3>
-      <video id="remoteVideo" autoplay playsinline></video>
+
+    <div class="row">
+      <div class="col">
+        <h4>SDP (Offer/Answer)</h4>
+        <textarea id="sdpBox"></textarea>
+      </div>
+      <div class="col">
+        <h4>ICE Candidates</h4>
+        <textarea id="localCandidatesBox"></textarea>
+      </div>
+      <div class="col">
+        <h4>Remote ICE Candidates</h4>
+        <textarea id="remoteCandidatesBox"></textarea>
+      </div>
     </div>
   </div>
-
-  <div>
-    <button id="startCamera">🎥 Start Camera</button>
-    <button id="createOffer">📨 Create Offer</button>
-    <button id="createAnswer">✅ Create Answer</button>
-    <button id="setRemoteAnswer">📥 Set Remote Answer</button>
-  </div>
-
-  <h3>SDP (Offer/Answer 교환용)</h3>
-  <textarea id="sdpBox" placeholder="여기에 Offer 혹은 Answer를 JSON 그대로 붙여넣거나, 여기서 복사하여 상대에게 전달"></textarea>
-
-  <h3>ICE Candidates</h3>
-  <p>아래 Local ICE 후보가 자동으로 채워집니다. 각 줄을 복사하여 상대에게 전달하세요.</p>
-  <textarea id="localCandidatesBox" placeholder="Local ICE candidates가 한 줄씩 추가됩니다."></textarea>
-
-  <h3>Remote ICE Candidates</h3>
-  <div>
-    <button id="addRemoteCandidates">➕ Add Remote ICE Candidates</button>
-  </div>
-  <textarea id="remoteCandidatesBox" placeholder="상대에게서 받은 ICE candidate들을 한 줄씩 붙여넣으세요."></textarea>
 
   <script>
     const localVideo = document.getElementById('localVideo');
