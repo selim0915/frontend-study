@@ -8,6 +8,10 @@
 
 'use strict';
 
+const useWs = (() => { try { return new URLSearchParams(location.search).get('signaling') === 'ws'; } catch (_) { return false; } })();
+let ws;
+let pendingOffer = null;
+
 const startButton = document.getElementById('startButton');
 const callButton = document.getElementById('callButton');
 const hangupButton = document.getElementById('hangupButton');
@@ -16,6 +20,10 @@ hangupButton.disabled = true;
 startButton.addEventListener('click', start);
 callButton.addEventListener('click', call);
 hangupButton.addEventListener('click', hangup);
+
+if (useWs) {
+  ensureWs();
+}
 
 let startTime;
 const localVideo = document.getElementById('localVideo');
@@ -48,6 +56,73 @@ const offerOptions = {
   offerToReceiveVideo: 1
 };
 
+function buildWsUrl() {
+  const secure = location.protocol === 'https:';
+  const scheme = secure ? 'wss' : 'ws';
+  const host = location.hostname;
+  const port = 3001;
+  return `${scheme}://${host}:${port}`;
+}
+function ensureWs() {
+  if (!useWs) return;
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  ws = new WebSocket(buildWsUrl());
+  ws.onmessage = async (msg) => {
+    try {
+      const data = JSON.parse(msg.data);
+      if (data.type === 'offer' && useWs && !localStream) {
+        pendingOffer = data.offer;
+        alert('카메라 시작을 먼저 눌러주세요.');
+        return;
+      }
+      if (!pc1 && data.type !== 'offer') return;
+      if (data.type === 'offer') {
+        await pc1.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await pc1.createAnswer();
+        await pc1.setLocalDescription(answer);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'answer', answer: pc1.localDescription }));
+        }
+      }
+      if (data.type === 'answer') {
+        await pc1.setRemoteDescription(new RTCSessionDescription(data.answer));
+      }
+      if (data.type === 'candidate' && data.candidate) {
+        try {
+          await pc1.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch {}
+      }
+    } catch {}
+  };
+}
+async function setupPcWs() {
+  const configuration = {};
+  pc1 = new RTCPeerConnection(configuration);
+  pc1.addEventListener('icecandidate', async e => {
+    if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'candidate', candidate: e.candidate }));
+    }
+  });
+  pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
+  const remoteStream = new MediaStream();
+  remoteVideo.srcObject = remoteStream;
+  pc1.addEventListener('track', (ev) => {
+    ev.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+  });
+  localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+  if (pendingOffer) {
+    try {
+      await pc1.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+      const answer = await pc1.createAnswer();
+      await pc1.setLocalDescription(answer);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'answer', answer: pc1.localDescription }));
+      }
+    } catch (_) {}
+    pendingOffer = null;
+  }
+}
+
 function getName(pc) {
   return (pc === pc1) ? 'pc1' : 'pc2';
 }
@@ -60,7 +135,16 @@ async function start() {
   console.log('Requesting local stream');
   startButton.disabled = true;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+    let stream;
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } else if (navigator.getUserMedia) {
+      stream = await new Promise((resolve, reject) => {
+        navigator.getUserMedia({ audio: true, video: true }, resolve, reject);
+      });
+    } else {
+      throw new ReferenceError('getUserMedia not supported');
+    }
     console.log('Received local stream');
     localVideo.srcObject = stream;
     localStream = stream;
@@ -73,38 +157,36 @@ async function start() {
 async function call() {
   callButton.disabled = true;
   hangupButton.disabled = false;
-  console.log('Starting call');
   startTime = window.performance.now();
   const videoTracks = localStream.getVideoTracks();
   const audioTracks = localStream.getAudioTracks();
-  if (videoTracks.length > 0) {
-    console.log(`Using video device: ${videoTracks[0].label}`);
-  }
-  if (audioTracks.length > 0) {
-    console.log(`Using audio device: ${audioTracks[0].label}`);
+  if (videoTracks.length > 0) {}
+  if (audioTracks.length > 0) {}
+  if (useWs) {
+    ensureWs();
+    await setupPcWs();
+    try {
+      const offer = await pc1.createOffer(offerOptions);
+      await pc1.setLocalDescription(offer);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'offer', offer: pc1.localDescription }));
+      }
+    } catch (e) {}
+    return;
   }
   const configuration = {};
-  console.log('RTCPeerConnection configuration:', configuration);
   pc1 = new RTCPeerConnection(configuration);
-  console.log('Created local peer connection object pc1');
   pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
   pc2 = new RTCPeerConnection(configuration);
-  console.log('Created remote peer connection object pc2');
   pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
   pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
   pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
   pc2.addEventListener('track', gotRemoteStream);
-
   localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
-  console.log('Added local stream to pc1');
-
   try {
-    console.log('pc1 createOffer start');
     const offer = await pc1.createOffer(offerOptions);
     await onCreateOfferSuccess(offer);
-  } catch (e) {
-    onCreateSessionDescriptionError(e);
-  }
+  } catch (e) {}
 }
 
 function onCreateSessionDescriptionError(error) {
@@ -204,11 +286,8 @@ function onIceStateChange(pc, event) {
 }
 
 function hangup() {
-  console.log('Ending call');
-  pc1.close();
-  pc2.close();
-  pc1 = null;
-  pc2 = null;
+  if (pc1) { try { pc1.close(); } catch {} pc1 = null; }
+  if (!useWs && pc2) { try { pc2.close(); } catch {} pc2 = null; }
   hangupButton.disabled = true;
   callButton.disabled = false;
 }
