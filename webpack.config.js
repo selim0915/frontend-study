@@ -26,7 +26,6 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: path.resolve(__dirname, 'src/webrtc'), to: 'src/webrtc' },
-        { from: path.resolve(__dirname, 'src/common'), to: 'src/common' },
       ],
     }),
   ],
