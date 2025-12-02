@@ -121,6 +121,7 @@
 
     let pc;
     let localStream;
+    let createOfferBtns;
 
     const configuration = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -148,9 +149,21 @@
       wsStatusSpan.style.color = connected ? 'green' : 'red';
     }
 
-    function setSseStatus(connected) {
-      sseStatusSpan.textContent = connected ? 'connected' : 'disconnected';
-      sseStatusSpan.style.color = connected ? 'green' : 'red';
+    /**
+     * 카메라 권한에 따른 버튼 활성화/비활성화 함수
+     */
+    function setButtonsDisabled(disabled) {
+      connectWsBtn.disabled = disabled;
+      disconnectWsBtn.disabled = disabled;
+      connectSseBtn.disabled = disabled;
+      disconnectSseBtn.disabled = disabled;
+      createAnswerBtn.disabled = disabled;
+      setRemoteAnswerBtn.disabled = disabled;
+      addRemoteCandidatesBtn.disabled = disabled;
+      
+      if (createOfferBtns) {
+        createOfferBtns.forEach(btn => btn.disabled = disabled);
+      }
     }
 
     function buildWsUrl(raw) {
@@ -215,6 +228,10 @@
       disconnectSseBtn = document.getElementById('disconnectSse');
       sseStatusSpan = document.getElementById('sseStatus');
       roomInput = document.getElementById('roomInput');
+
+      createOfferBtns = document.querySelectorAll('.createOffer');
+
+      setButtonsDisabled(true); // 페이지 로드 시 Start Camera를 제외한 모든 버튼 비활성화
     
       connectWsBtn.onclick = () => {
         if (ws && ws.readyState === WebSocket.OPEN) return;
@@ -351,6 +368,8 @@
         localVideo.srcObject = localStream;
         ensurePC();
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+        setButtonsDisabled(false); // 카메라가 켜지면 모든 버튼 활성화
       } catch (e) {
         alert('카메라 시작 실패: ' + e.message);
       }
