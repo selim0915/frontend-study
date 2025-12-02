@@ -21,7 +21,7 @@
     </div>
 
     <div class="row">
-      <button id="startCamera">🎥 Start Camera</button>
+      <button id="startCamera" onclick="startCamera()">🎥 Start Camera</button>
     </div>
   </div>
 
@@ -110,7 +110,6 @@
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
 
-    const startBtn = document.getElementById('startCamera');
     const createAnswerBtn = document.getElementById('createAnswer');
     const setRemoteAnswerBtn = document.getElementById('setRemoteAnswer');
     const addRemoteCandidatesBtn = document.getElementById('addRemoteCandidates');
@@ -361,19 +360,28 @@
       }
     }
 
-    // 카메라 시작
-    startBtn.onclick = async () => {
+    /**
+     * 카메라 연결 함수
+     */
+    async function startCamera() {
       try {
+        const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+        const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
+
+        if (cameraStatus.state === 'denied') { alert('카메라 권한이 거부되었습니다.'); return; }
+        if (microphoneStatus.state === 'denied') { alert('마이크 권한이 거부되었습니다.'); return; }
+
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
+
         ensurePC();
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
         setButtonsDisabled(false); // 카메라가 켜지면 모든 버튼 활성화
       } catch (e) {
-        alert('카메라 시작 실패: ' + e.message);
+        alert('Error startCamera\n' + e.message);
       }
-    };
+    }
 
     // Offer 생성: 수동/WS 병행
     async function handleCreateOffer() {
