@@ -21,7 +21,10 @@
     </div>
 
     <div class="row">
-      <button id="startCamera" onclick="startCamera()">🎥 Start Camera</button>
+      <button id="startCallBtn">통화 연결</button>
+      <button id="endCallBtn">통화 종료</button>
+      <button id="toggleCameraBtn">카메라 On/Off</button>
+      <button id="toggleAudioBtn">오디오 On/Off</button>
     </div>
   </div>
 
@@ -110,6 +113,11 @@
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
 
+    const startCallBtn = document.getElementById('startCallBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
+
     const createAnswerBtn = document.getElementById('createAnswer');
     const setRemoteAnswerBtn = document.getElementById('setRemoteAnswer');
     const addRemoteCandidatesBtn = document.getElementById('addRemoteCandidates');
@@ -152,18 +160,25 @@
      * 카메라 권한에 따른 버튼 활성화/비활성화 함수
      */
     function setButtonsDisabled(disabled) {
-      connectWsBtn.disabled = disabled;
-      disconnectWsBtn.disabled = disabled;
-      connectSseBtn.disabled = disabled;
-      disconnectSseBtn.disabled = disabled;
-      createAnswerBtn.disabled = disabled;
-      setRemoteAnswerBtn.disabled = disabled;
-      addRemoteCandidatesBtn.disabled = disabled;
-      
-      if (createOfferBtns) {
-        createOfferBtns.forEach(btn => btn.disabled = disabled);
+        // 통화 상태와 관계 없는 버튼들
+        connectWsBtn.disabled = disabled;
+        disconnectWsBtn.disabled = disabled;
+        connectSseBtn.disabled = disabled;
+        disconnectSseBtn.disabled = disabled;
+        createAnswerBtn.disabled = disabled;
+        setRemoteAnswerBtn.disabled = disabled;
+        addRemoteCandidatesBtn.disabled = disabled;
+        if (createOfferBtns) {
+          createOfferBtns.forEach(btn => btn.disabled = disabled);
+        }
       }
-    }
+
+      function updateCallButtons(inCall) {
+        startCallBtn.disabled = inCall;
+        endCallBtn.disabled = !inCall;
+        toggleCameraBtn.disabled = !inCall;
+        toggleAudioBtn.disabled = !inCall;
+      }
 
     function buildWsUrl(raw) {
       console.log(raw)
@@ -231,6 +246,7 @@
       createOfferBtns = document.querySelectorAll('.createOffer');
 
       setButtonsDisabled(true); // 페이지 로드 시 Start Camera를 제외한 모든 버튼 비활성화
+      updateCallButtons(false);
     
       connectWsBtn.onclick = () => {
         if (ws && ws.readyState === WebSocket.OPEN) return;
@@ -378,10 +394,55 @@
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
         setButtonsDisabled(false); // 카메라가 켜지면 모든 버튼 활성화
+        updateCallButtons(true);
       } catch (e) {
         alert('Error startCamera\n' + e.message);
+
+    // 통화 종료
+    function endCall() {
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      localVideo.srcObject = null;
+      remoteVideo.srcObject = null;
+
+      // UI 초기화
+      sdpBox.value = '';
+      localCandidatesBox.value = '';
+      remoteCandidatesBox.value = '';
+      setButtonsDisabled(true);
+      updateCallButtons(false);
+    }
+
+    // 카메라 On/Off
+    function toggleCamera() {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+        }
       }
     }
+
+    // 오디오 On/Off
+    function toggleAudio() {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+        }
+      }
+    }
+
+    startCallBtn.onclick = startCall;
+    endCallBtn.onclick = endCall;
+    toggleCameraBtn.onclick = toggleCamera;
+    toggleAudioBtn.onclick = toggleAudio;
 
     // Offer 생성: 수동/WS 병행
     async function handleCreateOffer() {
