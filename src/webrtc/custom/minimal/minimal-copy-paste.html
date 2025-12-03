@@ -107,14 +107,12 @@
     let createOfferBtns;
 
     const configuration = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: []
     };
 
     // WebSocket signaling
     let connectWsBtn, disconnectWsBtn, wsStatusSpan, wsUrlInput;
     let ws = null;
-
-
 
     function setWsStatus(connected) {
       wsStatusSpan.textContent = connected ? 'connected' : 'disconnected';
