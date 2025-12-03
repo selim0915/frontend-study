@@ -52,30 +52,6 @@
     </div>
   </div>
 
-  <!-- HTTP(SSE) signaling controls -->
-  <div class="panel">
-    <h3>HTTP(SSE) signaling</h3>
-    <p class="sub-text">
-      - 웹서버 3000 포트로 접속<br/>
-      - A와 B 모두 같은 Room 입력 후 “Connect SSE” 클릭하여 connected 확인<br/>
-      - A에서 “Create Offer” 클릭<br/>
-      - B에서 자동으로 Answer 응답, ICE 후보 자동 교환<br/>
-    </p>
-
-    <div class="row">
-      <label>
-        Room:
-        <input id="roomInput" type="text" style="width: 180px;" value="default" />
-      </label>
-      <button id="connectSse">🔌 Connect SSE</button>
-      <button id="disconnectSse">❌ Disconnect SSE</button>
-      <span id="sseStatus">disconnected</span>
-    </div>
-    <div class="row">
-      <button class="createOffer" onclick="handleCreateOffer()">Create Offer</button>
-    </div>
-  </div>
-
   <!-- 수동 WebRTC 연결 -->
   <div class="panel">
     <h3>수동 WebRTC 연결</h3>
@@ -138,18 +114,7 @@
     let connectWsBtn, disconnectWsBtn, wsStatusSpan, wsUrlInput;
     let ws = null;
 
-    // HTTP(SSE) signaling
-    let connectSseBtn, disconnectSseBtn, sseStatusSpan, roomInput;
-    let sse = null;
-    const clientId = (() => {
-      try {
-        const arr = new Uint8Array(16);
-        (crypto && crypto.getRandomValues) ? crypto.getRandomValues(arr) : arr.fill(0);
-        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
-      } catch (_) {
-        return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
-      }
-    })();
+
 
     function setWsStatus(connected) {
       wsStatusSpan.textContent = connected ? 'connected' : 'disconnected';
@@ -157,14 +122,13 @@
     }
 
     /**
-     * 카메라 권한에 따른 버튼 활성화/비활성화 함수
+     * WebRTC 관련 버튼 상태 업데이트 함수
+     * @param {boolean} disable - true이면 "Start Camera"를 제외한 모든 버튼을 비활성화,
+      *                           false이면 카메라가 켜지면 모든 버튼을 활성화
      */
     function setButtonsDisabled(disabled) {
-      // 통화 상태와 관계 없는 버튼들
       connectWsBtn.disabled = disabled;
       disconnectWsBtn.disabled = disabled;
-      connectSseBtn.disabled = disabled;
-      disconnectSseBtn.disabled = disabled;
       createAnswerBtn.disabled = disabled;
       setRemoteAnswerBtn.disabled = disabled;
       addRemoteCandidatesBtn.disabled = disabled;
@@ -173,6 +137,9 @@
       }
     }
 
+    /**
+     * 통화 상태 관련 버튼 상태 업데이트 함수
+     */
     function updateCallButtons(inCall) {
       startCallBtn.disabled = inCall;
       endCallBtn.disabled = !inCall;
@@ -180,46 +147,22 @@
       toggleAudioBtn.disabled = !inCall;
     }
 
-    function buildWsUrl(raw) {
+    /**
+     * WebSocket 서버 URL 생성 함수 (항상 wss 사용)
+     */
+    function buildWssUrl(raw) {
       console.log(raw)
 
       const input = (raw || '').trim();
       const pageIsHttps = location.protocol === 'https:';
-      const defaultScheme = pageIsHttps ? 'wss' : 'ws';
+      const defaultHostname = location.hostname;
       const defaultPort = 3001;
 
       if (!input) {
-        return `${defaultScheme}://${location.hostname}:${defaultPort}`;
+        return `wss://${defaultHostname}:${defaultPort}`;
       }
 
-      try {
-        const u = new URL(input);
-        if (u.protocol === 'http:' || u.protocol === 'https:') {
-          u.protocol = pageIsHttps ? 'wss:' : 'ws:';
-        }
-        if (u.protocol !== 'ws:' && u.protocol !== 'wss:') {
-          throw new Error('Unsupported protocol');
-        }
-        if (!u.port) {
-          u.port = String(defaultPort);
-        }
-        return u.toString();
-      } catch (_) {
-        const hasPort = /:\d+$/.test(input);
-        const host = input;
-        const portPart = hasPort ? '' : `:${defaultPort}`;
-        return `${defaultScheme}://${host}${portPart}`;
-      }
-    }
-
-    function toHttpsUrl(wsUrl) {
-      try {
-        const u = new URL(wsUrl);
-        u.protocol = 'https:';
-        return u.toString();
-      } catch (_) {
-        return '';
-      }
+      return input;
     }
 
     async function preflightHttps(url) {
@@ -238,10 +181,7 @@
       disconnectWsBtn = document.getElementById('disconnectWs');
       wsStatusSpan = document.getElementById('wsStatus');
       wsUrlInput = document.getElementById('wsUrl');
-      connectSseBtn = document.getElementById('connectSse');
-      disconnectSseBtn = document.getElementById('disconnectSse');
-      sseStatusSpan = document.getElementById('sseStatus');
-      roomInput = document.getElementById('roomInput');
+
 
       createOfferBtns = document.querySelectorAll('.createOffer');
 
@@ -251,8 +191,11 @@
       connectWsBtn.onclick = () => {
         if (ws && ws.readyState === WebSocket.OPEN) return;
         try {
-          const targetUrl = buildWsUrl(wsUrlInput.value || '');
-          const probeUrl = toHttpsUrl(targetUrl);
+          const targetUrl = buildWssUrl(wsUrlInput.value || '');
+          const u = new URL(targetUrl);
+          u.protocol = 'https:';
+
+          const probeUrl = u.toString();
           preflightHttps(probeUrl).then((ok) => {
             if (!ok) {
               alert('모바일에서 인증서 신뢰가 필요합니다. 아래 링크를 열어 승인 후 다시 시도하세요:\n' + probeUrl);
@@ -307,42 +250,6 @@
           setWsStatus(false);
         }
       };
-
-      connectSseBtn.onclick = () => {
-        if (sse) return;
-        try {
-          const room = (roomInput.value || 'default').trim();
-          const sseUrl = `${location.origin}/signaling/${encodeURIComponent(room)}/sse?cid=${encodeURIComponent(clientId)}`;
-          sse = new EventSource(sseUrl);
-          sse.onopen = () => setSseStatus(true);
-          sse.onerror = () => setSseStatus(false);
-          sse.onmessage = async (ev) => {
-            try {
-              const data = JSON.parse(ev.data);
-              ensurePC();
-              if (data.type === 'offer') {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                await sendHttp(room, { type: 'answer', answer: pc.localDescription });
-              }
-              if (data.type === 'answer') {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-              }
-              if (data.type === 'candidate') {
-                try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (err) {}
-              }
-            } catch (err) {}
-          };
-        } catch (e) {
-          alert('SSE 연결 실패: ' + e.message);
-        }
-      };
-
-      disconnectSseBtn.onclick = () => {
-        if (sse) { try { sse.close(); } catch {} sse = null; }
-        setSseStatus(false);
-      };
     });
 
     function ensurePC() {
@@ -363,9 +270,6 @@
             // WS 연결 시 자동 전송
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
-            } else if (sse) {
-              const room = (roomInput.value || 'default').trim();
-              sendHttp(room, { type: 'candidate', candidate: event.candidate });
             }
           }
         };
@@ -381,19 +285,22 @@
      */
     async function startCall() {
       try {
+        // 권한 확인
         const cameraStatus = await navigator.permissions.query({ name: 'camera' });
         const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-
         if (cameraStatus.state === 'denied') { alert('카메라 권한이 거부되었습니다.'); return; }
         if (microphoneStatus.state === 'denied') { alert('마이크 권한이 거부되었습니다.'); return; }
 
+        // 미디어 장치 연결
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
 
+        // WebRTC 연결
         ensurePC();
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
-        setButtonsDisabled(false); // 카메라가 켜지면 모든 버튼 활성화
+        // UX 버튼 상태 설정
+        setButtonsDisabled(false);
         updateCallButtons(true);
       } catch (e) {
         alert('Error startCamera\n' + e.message);
@@ -459,9 +366,6 @@
         // WS 연결되어 있으면 추가로 전송
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
-        } else if (sse) {
-          const room = (roomInput.value || 'default').trim();
-          await sendHttp(room, { type: 'offer', offer: pc.localDescription });
         }
       } catch (e) {
         alert('Offer 생성 실패: ' + e.message);
@@ -483,9 +387,6 @@
         // WS 연결되어 있으면 추가로 전송
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
-        } else if (sse) {
-          const room = (roomInput.value || 'default').trim();
-          await sendHttp(room, { type: 'answer', answer: pc.localDescription });
         }
       } catch (e) {
         alert('Answer 생성 실패: ' + e.message);
@@ -520,27 +421,6 @@
         alert('ICE candidates 적용 실패: ' + e.message);
       }
     };
-    
-    async function sendHttp(room, payload) {
-      try {
-        const res = await fetch(`${location.origin}/signaling/${encodeURIComponent(room)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, senderId: clientId }),
-          keepalive: true,
-        });
-        const json = await res.json().catch(() => ({}));
-        if (json && typeof json.delivered === 'number') {
-          console.log(`HTTP signaling delivered: ${json.delivered} (${payload.type})`);
-          if (json.delivered === 0) {
-            alert('상대가 SSE에 연결되지 않았습니다. 두 기기 모두 Connect SSE 후 다시 시도하세요.');
-          }
-        }
-      } catch (e) {
-        console.error('HTTP signaling 전송 실패:', e);
-        alert('HTTP signaling 전송 실패: ' + (e && e.message ? e.message : 'unknown error'));
-      }
-    }
   </script>
 </body>
 </html>
