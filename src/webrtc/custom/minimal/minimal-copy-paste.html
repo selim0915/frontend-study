@@ -3,6 +3,14 @@
 <head>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <link rel="stylesheet" href="../../css/main.css">
+  <style>
+    .status-idle { color: gray; }
+    .status-waiting { color: orange; }
+    .status-connecting { color: blue; }
+    .status-connected { color: green; }
+    .status-disconnected { color: red; }
+    .status-error { color: red; font-weight: bold; }
+  </style>
 </head>
 <body>
   <h2>Minimal WebRTC 테스트</h2>
@@ -12,17 +20,19 @@
     <div class="row">
       <div class="col">
         <h3>Local</h3>
+        <p class="status">상태: <span id="localStatus">-</span></p>
         <video id="localVideo" autoplay playsinline muted></video>
       </div>
       <div class="col">
         <h3>Remote</h3>
+        <p class="status">상태: <span id="remoteStatus">-</span></p>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
     </div>
 
     <div class="row">
       <button id="startCallBtn" onclick="startCall()">통화 연결</button>
-      <button id="endCallBtn" onclick="endCall()">통화 종료</button>
+      <button id="endCallBtn" onclick="endCall(); disconnectWss();">통화 종료</button>
       <button id="toggleCameraBtn" onclick="toggleCamera()">카메라 On/Off</button>
       <button id="toggleAudioBtn" onclick="toggleAudio()">오디오 On/Off</button>
     </div>
@@ -88,6 +98,8 @@
   <script>
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
+    const localStatus = document.getElementById('localStatus');
+    const remoteStatus = document.getElementById('remoteStatus');
 
     const startCallBtn = document.getElementById('startCallBtn');
     const endCallBtn = document.getElementById('endCallBtn');
@@ -121,6 +133,29 @@
       const wsStatusSpan = document.getElementById('wsStatus');
       wsStatusSpan.textContent = connected ? 'connected' : 'disconnected';
       wsStatusSpan.style.color = connected ? 'green' : 'red';
+    }
+
+    /**
+     * 통화 연결 상태 함수
+     */
+    function setCallStatus(who, status, message) {
+      const statusSpan = who === 'local' ? localStatus : remoteStatus;
+      const statusMap = {
+        IDLE: { text: '대기', className: 'status-idle' },
+        WAITING: { text: '접속', className: 'status-waiting' },
+        CONNECTING: { text: '연결 시도 중', className: 'status-connecting' },
+        CONNECTED: { text: '통화 중', className: 'status-connected' },
+        DISCONNECTED: { text: '통화 종료', className: 'status-disconnected' },
+        error: { text: '오류', className: 'status-error' },
+      };
+      const { text, className } = statusMap[status] || { text: message || status, className: '' };
+      statusSpan.textContent = text + (message ? ` (${message})` : '');
+      statusSpan.className = className;
+
+      // 상태를 상대방에게 전송
+      if (who === 'local' && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'status', status }));
+      }
     }
 
     /**
@@ -176,6 +211,23 @@
 
         pc.oniceconnectionstatechange = () => {
           console.log('ICE state:', pc.iceConnectionState);
+          switch (pc.iceConnectionState) {
+            case 'checking':
+              setCallStatus('remote', 'CONNECTING');
+              break;
+            case 'connected':
+            case 'completed':
+              setCallStatus('remote', 'CONNECTED');
+              break;
+            case 'failed':
+              setCallStatus('remote', 'error', '연결 실패');
+              break;
+            case 'disconnected':
+            case 'closed':
+              setCallStatus('remote', 'DISCONNECTED');
+              endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
+              break;
+          }
         };
       }
     }
@@ -221,6 +273,7 @@
           try {
             const data = JSON.parse(msg.data);
             ensurePC();
+
             if (data.type === 'offer') {
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
               const answer = await pc.createAnswer();
@@ -231,15 +284,21 @@
                 sdpBox.value = JSON.stringify(pc.localDescription);
               }
             }
+
             if (data.type === 'answer') {
               await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
             }
+
             if (data.type === 'candidate') {
               try {
                 await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
               } catch (err) {
                 console.error('Error adding ICE candidate:', err);
               }
+            }
+
+            if (data.type === 'status') {
+              setCallStatus('remote', data.status);
             }
           } catch (e) {
             console.error('WS message handling error:', e);
@@ -254,11 +313,17 @@
      * WebSocket 연결 종료
      */
     function disconnectWss() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // 종료 상태 전송
+        ws.send(JSON.stringify({ type: 'status', status: 'DISCONNECTED' }));
+      }
+
       if (ws) {
         try { ws.close(); } catch {}
         ws = null;
         setWsStatus(false);
       }
+      endCall()
     }
   
     /**
@@ -283,7 +348,9 @@
         // UX 상태 업데이트
         setButtonsDisabled(false);
         updateCallButtons(true);
+        setCallStatus('local', 'WAITING');
       } catch (e) {
+        setCallStatus('local', 'error', e.message);
         alert('Error startCamera\n' + e.message);
       }
     }
@@ -292,8 +359,6 @@
      * 통화 종료
      */
     function endCall() {
-      disconnectWss();
-
       if (pc) {
         pc.close();
         pc = null;
@@ -304,6 +369,9 @@
       }
       localVideo.srcObject = null;
       remoteVideo.srcObject = null;
+
+      setCallStatus('local', 'DISCONNECTED');
+      setCallStatus('remote', 'DISCONNECTED'); 
 
       // UI 초기화
       sdpBox.value = '';
@@ -416,6 +484,8 @@
       // UX 상태 업데이트
       setButtonsDisabled(true);
       updateCallButtons(false);
+      setCallStatus('local', 'IDLE');
+      setCallStatus('remote', 'IDLE');
     });
   </script>
 </body>
