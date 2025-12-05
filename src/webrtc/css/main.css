@@ -255,9 +255,9 @@ fieldset > select {
   padding: 20px;
   border: 1px solid #ddd;
   border-radius: 8px;
-
-  #wsStatus {
-    margin-left: 10px;
-    color: red;
-  }
 }
+.status-waiting { color: gray; }
+.status-in-progress { color: orange; }
+.status-connected { color: green; }
+.status-error { color: red; }
+.status-closed { color: lightcoral; }
