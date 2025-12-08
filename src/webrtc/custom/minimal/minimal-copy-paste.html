@@ -13,7 +13,7 @@
   </style>
 </head>
 <body>
-  <h2>Minimal WebRTC 테스트</h2>
+  <h2>minimal-copy-paste</h2>
 
   <!-- UI/UX 기본 요소 -->
   <div>
@@ -141,7 +141,7 @@
     function setCallStatus(who, status, message) {
       const statusSpan = who === 'local' ? localStatus : remoteStatus;
       const statusMap = {
-        IDLE: { text: '대기', className: 'status-idle' },
+        IDLE: { text: '대기중', className: 'status-idle' },
         WAITING: { text: '접속', className: 'status-waiting' },
         CONNECTING: { text: '연결 시도 중', className: 'status-connecting' },
         CONNECTED: { text: '통화 중', className: 'status-connected' },
@@ -217,6 +217,7 @@
               break;
             case 'connected':
             case 'completed':
+              setCallStatus('local', 'CONNECTED');
               setCallStatus('remote', 'CONNECTED');
               break;
             case 'failed':
@@ -275,6 +276,7 @@
             ensurePC();
 
             if (data.type === 'offer') {
+              setCallStatus('remote', 'CONNECTING');
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
@@ -349,6 +351,7 @@
         setButtonsDisabled(false);
         updateCallButtons(true);
         setCallStatus('local', 'WAITING');
+        setCallStatus('remote', 'IDLE');
       } catch (e) {
         setCallStatus('local', 'error', e.message);
         alert('Error startCamera\n' + e.message);
@@ -410,6 +413,7 @@
     async function handleCreateOffer() {
       try {
         ensurePC();
+        setCallStatus('local', 'CONNECTING');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
     
