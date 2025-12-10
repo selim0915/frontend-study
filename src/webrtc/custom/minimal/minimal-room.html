@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <script src="/src/webrtc/js/common/set-title.js"></script>
+  <script src="/src/webrtc/js/common/utils.js"></script>
+  <link rel="stylesheet" href="../../css/main.css">
+</head>
+<body>
+  <h2>Minimal-room</h2>
+
+  <!-- UI/UX 기본 요소 -->
+  <div>
+    <div class="row">
+      <div class="col">
+        <h3>Local</h3>
+        <p class="status">상태: <span id="localStatus">-</span></p>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
+      <div class="col">
+        <h3>Remote</h3>
+        <p class="status">상태: <span id="remoteStatus">-</span></p>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="startCallBtn" onclick="startCall()">통화 연결</button>
+      <button id="endCallBtn" onclick="endCall(); disconnectWss();">통화 종료</button>
+      <button id="toggleCameraBtn" onclick="toggleCamera()">카메라 On/Off</button>
+      <button id="toggleAudioBtn" onclick="toggleAudio()">오디오 On/Off</button>
+    </div>
+  </div>
+
+  <!-- WebSocket signaling controls -->
+  <div class="panel">
+    <h3>Signaling(WebSocket) 연결</h3>
+    <p class="sub-text">
+      - A와 B 모두 하단 WS URL 입력란이 wss://localhost:3001인지 확인 후 “Connect WS” 클릭하여 connected 확인<br/>
+      - disconnected인 경우, <a href="#" onclick="openTab('https://192.168.2.95:3001'); return false;">https://192.168.2.95:3001</a> 시그널링 서버 신뢰된 사이트 설정
+      - A에서 “Create Offer” 클릭<br/>
+      - B에서 자동으로 Answer 응답, ICE 후보 자동 교환<br/>
+    </p>
+
+    <div class="row">
+      <label>
+        WS URL:
+        <input id="wsUrl" type="text" style="width: 360px;" value="wss://192.168.2.95:3001" />
+      </label>
+      <button id="connectWs" onclick="connectWss()">🔌 Connect WS</button>
+      <button id="disconnectWs" onclick="disconnectWss()">❌ Disconnect WS</button>
+      <span id="wsStatus">disconnected</span>
+    </div>
+    <div class="row">
+      <button class="createOffer" onclick="handleCreateOffer()">Create Offer</button>
+    </div>
+  </div>
+
+  <script>
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const localStatus = document.getElementById('localStatus');
+    const remoteStatus = document.getElementById('remoteStatus');
+
+    const startCallBtn = document.getElementById('startCallBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
+
+    const connectWsBtn = document.getElementById('connectWs');
+    const disconnectWsBtn = document.getElementById('disconnectWs');
+    const createOfferBtns = document.querySelectorAll('.createOffer');
+
+    const sdpBox = document.getElementById('sdpBox');
+    const localCandidatesBox = document.getElementById('localCandidatesBox');
+    const remoteCandidatesBox = document.getElementById('remoteCandidatesBox');
+
+    const configuration = { iceServers: [] };
+
+    let pc;
+    let localStream;
+    let ws = null;
+
+    /**
+     * socket 연결 상태 업데이트 함수
+     */
+    function setWsStatus(connected) {
+      const wsStatusSpan = document.getElementById('wsStatus');
+      wsStatusSpan.textContent = connected ? 'connected' : 'disconnected';
+      wsStatusSpan.style.color = connected ? 'green' : 'red';
+    }
+
+    /**
+     * 통화 연결 상태 함수
+     */
+    function setCallStatus(who, status, message) {
+      const statusSpan = who === 'local' ? localStatus : remoteStatus;
+      const statusMap = {
+        IDLE: { text: '대기중', className: 'status-idle' },
+        WAITING: { text: '접속', className: 'status-waiting' },
+        CONNECTING: { text: '연결 시도 중', className: 'status-connecting' },
+        CONNECTED: { text: '통화 중', className: 'status-connected' },
+        DISCONNECTED: { text: '통화 종료', className: 'status-disconnected' },
+        error: { text: '오류', className: 'status-error' },
+      };
+      const { text, className } = statusMap[status] || { text: message || status, className: '' };
+      statusSpan.textContent = text + (message ? ` (${message})` : '');
+      statusSpan.className = className;
+
+      // 상태를 상대방에게 전송
+      if (who === 'local' && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'status', status }));
+      }
+    }
+
+    /**
+     * WebRTC 버튼 관련 상태 업데이트 함수
+     * @param {boolean} disable - true이면 "Start Camera"를 제외한 모든 버튼을 비활성화,
+     *                            false이면 카메라가 켜지면 모든 버튼을 활성화
+     */
+    function setButtonsDisabled(disabled) {
+      connectWsBtn.disabled = disabled;
+      disconnectWsBtn.disabled = disabled;
+      if (createOfferBtns) {
+        createOfferBtns.forEach(btn => btn.disabled = disabled);
+      }
+    }
+
+    /**
+     * 카메라/오디오 버튼 관련 상태 업데이트 함수
+     */
+    function updateCallButtons(inCall) {
+      startCallBtn.disabled = inCall;
+      endCallBtn.disabled = !inCall;
+      toggleCameraBtn.disabled = !inCall;
+      toggleAudioBtn.disabled = !inCall;
+    }
+
+    /**
+     * RTCPeerConnection이 없으면 생성하고, 원격 스트림 처리와 ICE 후보 수집/전송을 설정하는 함수
+     */
+    function ensurePC() {
+      if (!pc) {
+        pc = new RTCPeerConnection(configuration);
+
+        const remoteStream = new MediaStream();
+        remoteVideo.srcObject = remoteStream;
+        pc.ontrack = (event) => {
+          event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
+        };
+
+        // 로컬 ICE 후보: 수동 텍스트 + WS 전송 병행
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            // WS 연결 시 자동 전송
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+            }
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          console.log('ICE state:', pc.iceConnectionState);
+          switch (pc.iceConnectionState) {
+            case 'checking':
+              setCallStatus('remote', 'CONNECTING');
+              break;
+            case 'connected':
+            case 'completed':
+              setCallStatus('local', 'CONNECTED');
+              setCallStatus('remote', 'CONNECTED');
+              break;
+            case 'failed':
+              setCallStatus('remote', 'error', '연결 실패');
+              break;
+            case 'disconnected':
+            case 'closed':
+              setCallStatus('remote', 'DISCONNECTED');
+              endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
+              break;
+          }
+        };
+      }
+    }
+
+    /**
+     * WebSocket 서버 URL 생성 함수 (항상 wss 사용)
+     */
+    function buildWssUrl(raw) {
+      console.log(raw)
+
+      const input = (raw || '').trim();
+      const pageIsHttps = location.protocol === 'https:';
+      const defaultHostname = location.hostname;
+      const defaultPort = 3001;
+
+      if (!input) {
+        return `wss://${defaultHostname}:${defaultPort}`;
+      }
+
+      return input;
+    }
+
+    /**
+     * WebSocket 연결
+     */
+    function connectWss() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+
+      try {
+        const wsUrlInput = document.getElementById('wsUrl');
+        const targetUrl = buildWssUrl(wsUrlInput.value || '');
+
+        ws = new WebSocket(targetUrl);
+        ws.onopen = () => setWsStatus(true);
+        ws.onclose = () => setWsStatus(false);
+
+        ws.onerror = (e) => {
+          setWsStatus(false);
+          alert('WS 연결 오류. 인증서 신뢰 또는 네트워크/방화벽을 확인하세요.');
+        };
+  
+        ws.onmessage = async (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            ensurePC();
+
+            if (data.type === 'offer') {
+              setCallStatus('remote', 'CONNECTING');
+              await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
+              }
+            }
+
+            if (data.type === 'answer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            }
+
+            if (data.type === 'candidate') {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+              } catch (err) {
+                console.error('Error adding ICE candidate:', err);
+              }
+            }
+
+            if (data.type === 'status') {
+              setCallStatus('remote', data.status);
+            }
+          } catch (e) {
+            console.error('WS message handling error:', e);
+          }
+        };
+      } catch (e) {
+        alert('WS 연결 실패: ' + e.message);
+      }
+    }
+
+    /**
+     * WebSocket 연결 종료
+     */
+    function disconnectWss() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // 종료 상태 전송
+        ws.send(JSON.stringify({ type: 'status', status: 'DISCONNECTED' }));
+      }
+
+      if (ws) {
+        try { ws.close(); } catch {}
+        ws = null;
+        setWsStatus(false);
+      }
+      endCall()
+    }
+  
+    /**
+     * 통화 연결
+     */
+    async function startCall() {
+      try {
+        // 권한 확인
+        const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+        const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
+        if (cameraStatus.state === 'denied') { alert('카메라 권한이 거부되었습니다.'); return; }
+        if (microphoneStatus.state === 'denied') { alert('마이크 권한이 거부되었습니다.'); return; }
+
+        // 미디어 장치 연결
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+
+        // WebRTC 연결
+        ensurePC();
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+        // UX 상태 업데이트
+        setButtonsDisabled(false);
+        updateCallButtons(true);
+        setCallStatus('local', 'WAITING');
+        setCallStatus('remote', 'IDLE');
+      } catch (e) {
+        setCallStatus('local', 'error', e.message);
+        alert('Error startCamera\n' + e.message);
+      }
+    }
+    
+    /**
+     * 통화 종료
+     */
+    function endCall() {
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      localVideo.srcObject = null;
+      remoteVideo.srcObject = null;
+
+      setCallStatus('local', 'DISCONNECTED');
+      setCallStatus('remote', 'DISCONNECTED'); 
+
+      setButtonsDisabled(true);
+      updateCallButtons(false);
+    }
+
+    /**
+     * 카메라 On/Off
+     */
+    function toggleCamera() {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+        }
+      }
+    }
+
+    /**
+     * 오디오 On/Off
+     */
+    function toggleAudio() {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+        }
+      }
+    }
+
+    
+    // Offer 생성: 수동/WS 병행
+    async function handleCreateOffer() {
+      try {
+        ensurePC();
+        setCallStatus('local', 'CONNECTING');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+    
+        // WS 연결되어 있으면 추가로 전송
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
+        }
+      } catch (e) {
+        alert('Offer 생성 실패: ' + e.message);
+      }
+    };
+    
+    window.addEventListener('DOMContentLoaded', () => {
+      // UX 상태 업데이트
+      setButtonsDisabled(true);
+      updateCallButtons(false);
+      setCallStatus('local', 'IDLE');
+      setCallStatus('remote', 'IDLE');
+    });
+  </script>
+</body>
+</html>
