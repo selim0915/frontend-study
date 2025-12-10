@@ -256,10 +256,6 @@ fieldset > select {
   border: 1px solid #ddd;
   border-radius: 8px;
 }
-.status-in-progress { color: orange; }
-.status-connected { color: green; }
-.status-error { color: red; }
-.status-closed { color: lightcoral; }
 
 .status-idle { color: gray; }
 .status-waiting { color: gray; }

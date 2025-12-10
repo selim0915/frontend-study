@@ -53,19 +53,23 @@ window.clearText = function(id) {
 }
 
 /**
+ * WebRTC 통화 상태를 나타내는 전역 객체
+ */
+const CALL_STATUS = {
+  IDLE:        { text: '접속', class: 'status-idle' },
+  WAITING:     { text: '대기', class: 'status-waiting' },
+  CONNECTING:  { text: '연결중', class: 'status-connecting' },
+  CONNECTED:   { text: '통화중', class: 'status-connected' },
+  DISCONNECTED:{ text: '종료', class: 'status-disconnected' },
+  ERROR:       { text: '오류', class: 'status-error' },
+};
+
+/**
  * 상태값을 DOM에 반영하는 공통 함수
  * @param {string} elementId - 상태를 넣을 DOM 요소 ID
  * @param {string} status - 표시할 상태 문자열
  */
 window.applyStatusToDOM = function(target, statusKey, message) {
-  const CALL_STATUS = {
-    IDLE:        { text: '접속',        class: 'status-idle' },
-    WAITING:     { text: '대기',        class: 'status-waiting' },
-    CONNECTING:  { text: '연결 시도 중', class: 'status-connecting' },
-    CONNECTED:   { text: '통화중',       class: 'status-connected' },
-    ERROR:       { text: '오류',         class: 'status-error' },
-    DISCONNECTED:{ text: '통화종료',     class: 'status-disconnected' },
-  };
 
   try {
     var el = document.getElementById(target + "Status");

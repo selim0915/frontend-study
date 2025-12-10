@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <script src="/src/webrtc/js/common/set-title.js"></script>
+  <script src="/src/webrtc/js/common/utils.js"></script>
+  <link rel="stylesheet" href="../../css/main.css">
+</head>
+<body>
+  <h2>Minimal-call</h2>
+
+  <div>
+    <div class="row">
+      <div class="col">
+        <h3>Local</h3>
+        <p class="status">상태: <span id="localStatus">-</span></p>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
+      <div class="col">
+        <h3>Remote</h3>
+        <p class="status">상태: <span id="remoteStatus">-</span></p>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="startCallBtn" onclick="startCall()" disabled>통화 시작</button>
+      <button id="endCallBtn" onclick="endCall()" disabled>통화 종료</button>
+      <button id="toggleCameraBtn" onclick="toggleCamera()" disabled>카메라 On/Off</button>
+      <button id="toggleAudioBtn" onclick="toggleAudio()" disabled>오디오 On/Off</button>
+    </div>
+  </div>
+
+  <script>
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    const startCallBtn = document.getElementById('startCallBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
+
+    const configuration = { iceServers: [] }; // LAN only
+    const wssUrl = `wss://192.168.2.95:3001`;
+
+    let pc = null;
+    let localStream = null;
+    let ws = null;
+    let pendingCandidates = [];
+    let isCaller = false;
+    let callState = 'idle';
+
+    /**
+     * 연결 상태 UI 표시시
+     */
+    function updateUiForState(state) {
+      callState = state;
+      switch (state) {
+        case 'idle':
+          startCallBtn.disabled = false;
+          endCallBtn.disabled = true;
+          toggleCameraBtn.disabled = true;
+          toggleAudioBtn.disabled = true;
+          break;
+        case 'waiting':
+        case 'incall':
+          startCallBtn.disabled = true;
+          endCallBtn.disabled = false;
+          toggleCameraBtn.disabled = false;
+          toggleAudioBtn.disabled = false;
+          break;
+      }
+    }
+
+    function ensurePC() {
+      if (pc) return;
+      
+      pc = new RTCPeerConnection(configuration);
+      pendingCandidates = [];
+
+      const remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
+        } else if (event.track) {
+          remoteStream.addTrack(event.track);
+        }
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+          } catch (e) {
+            console.warn('candidate send failed', e);
+          }
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('ICE state:', pc.iceConnectionState);
+
+        switch (pc.iceConnectionState) {
+          case 'checking':
+            applyStatusToDOM('local', 'CONNECTING');
+            break;
+          case 'connected':
+          case 'completed':
+            applyStatusToDOM('local', 'CONNECTED');
+            applyStatusToDOM('remote', 'CONNECTED');
+            updateUiForState('incall');
+            break;
+          case 'failed':
+            applyStatusToDOM('local', 'ERROR', 'ICE 연결 실패');
+            endCall();
+            break;
+          case 'disconnected':
+          case 'closed':
+            endCall();
+            break;
+        }
+      };
+    }
+
+    // connectWss now returns a promise
+    function connectWss() {
+      return new Promise((resolve, reject) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          return resolve();
+        }
+
+        if (ws && ws.readyState === WebSocket.CONNECTING) {
+          ws.addEventListener('open', () => resolve());
+          ws.addEventListener('error', (err) => reject(err));
+          return;
+        }
+
+        try {
+          ws = new WebSocket(wssUrl);
+          
+          ws.onopen = () => {
+            console.log('WebSocket connected');
+
+            resolve();
+          };
+          ws.onclose = () => {
+            console.log('WebSocket disconnected');
+
+            ws = null; 
+            updateUiForState('idle');
+          };
+          ws.onerror = (e) => {
+            console.error('WS 연결 오류. 인증서 신뢰 또는 네트워크/방화벽을 확인하세요.');
+
+            ws = null;
+            updateUiForState('idle');
+            reject(e);
+          };
+    
+          ws.onmessage = async (msg) => {
+            try {
+              const data = JSON.parse(msg.data);
+
+              switch(data.type) {
+                case 'offer': {
+                  if (callState === 'incall') {
+                    console.log('이미 통화 중이라 offer 무시');
+                    return;
+                  }
+
+                  // signalingState !== 'stable' 이면 충돌 처리
+                  if (pc && pc.signalingState !== 'stable') {
+                    console.warn('offer collision: local offer 제거 후 incoming offer 처리');
+                    await pc.setLocalDescription({ type: 'rollback' });
+                  }
+
+                  ensurePC();
+                  isCaller = false;
+
+                  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+                  if (!localStream) await startLocalMedia(false);
+
+                  const answer = await pc.createAnswer();
+                  await pc.setLocalDescription(answer);
+
+                  if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
+                  }
+
+                  while (pendingCandidates.length) {
+                    const c = pendingCandidates.shift();
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){ console.warn('addIceCandidate failed', e); }
+                  }
+                  break;
+                }
+                case 'answer': {
+                  await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+                  while (pendingCandidates.length) {
+                    const c = pendingCandidates.shift();
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){ console.warn('addIceCandidate failed', e); }
+                  }
+                  break;
+                }
+                case 'candidate': {
+                 if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); }
+                    catch(e){ console.warn('addIceCandidate failed', e); }
+                  } else {
+                    pendingCandidates.push(data.candidate);
+                  }
+                  break;
+                }
+                case 'hangup': {
+                  endCall();
+                  break;
+                }
+              }
+            } catch (e) {
+              console.error('WS message handling error:', e);
+            }
+          };
+        } catch (e) {
+          console.error('WS 연결 실패: ' + e.message);
+          reject(e);
+        }
+      });
+    }
+    
+    async function startLocalMedia(createOffer = true) {
+        try {
+          ensurePC();
+
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+          localVideo.srcObject = stream;
+          localStream = stream;
+
+          applyStatusToDOM('local', 'WAITING');
+          updateUiForState('waiting');
+          
+          stream.getTracks().forEach(track => {
+            if (!pc.getSenders().find(s => s.track === track)) {
+              pc.addTrack(track, stream);
+            }
+          });
+        } catch (e) {
+            applyStatusToDOM('local', 'ERROR', e.message);
+            console.error('카메라/마이크 접근 오류', e);
+            updateUiForState('idle');
+            throw e;
+        }
+    }
+
+    /**
+     * 통화 시작 이벤트
+     */
+    async function startCall() {
+      startCallBtn.disabled = true;
+
+      try {
+        await connectWss();
+        isCaller = true;
+
+        ensurePC();
+        await startLocalMedia(false); // Get media, but don't create an offer
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        applyStatusToDOM('local', 'CONNECTING');
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
+        }
+      } catch (e) {
+        console.log('startCall failed', e);
+      }
+    }
+    
+    /**
+     * 통화 종료 이벤트
+     */
+    function endCall() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'hangup' }));
+      }
+
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      localVideo.srcObject = null;
+      remoteVideo.srcObject = null;
+
+      applyStatusToDOM('local', 'IDLE');
+      applyStatusToDOM('remote', 'IDLE'); 
+
+      updateUiForState('idle');
+    }
+
+    function toggleCamera() {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+        }
+      }
+    }
+
+    function toggleAudio() {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+        }
+      }
+    }
+    
+    window.addEventListener('DOMContentLoaded', () => {
+      applyStatusToDOM('local', 'IDLE');
+      applyStatusToDOM('remote', 'IDLE');
+      updateUiForState('idle');
+    });
+
+    window.addEventListener('beforeunload', endCall);
+  </script>
+</body>
+</html>
