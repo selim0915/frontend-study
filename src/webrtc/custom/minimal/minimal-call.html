@@ -25,8 +25,8 @@
     <div class="row">
       <button id="startCallBtn" onclick="startCall()" disabled>통화 시작</button>
       <button id="endCallBtn" onclick="endCall()" disabled>통화 종료</button>
-      <button id="toggleCameraBtn" onclick="toggleCamera()" disabled>카메라 On/Off</button>
-      <button id="toggleAudioBtn" onclick="toggleAudio()" disabled>오디오 On/Off</button>
+      <button id="toggleCameraBtn" onclick="toggleCamera()" disabled>카메라 On</button>
+      <button id="toggleAudioBtn" onclick="toggleAudio()" disabled>오디오 On</button>
     </div>
   </div>
 
@@ -309,6 +309,7 @@
         const videoTrack = localStream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.enabled = !videoTrack.enabled;
+          toggleCameraBtn.textContent = `카메라 ${videoTrack.enabled ? 'On' : 'Off'}`;
         }
       }
     }
@@ -318,6 +319,7 @@
         const audioTrack = localStream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.enabled = !audioTrack.enabled;
+          toggleAudioBtn.textContent = `오디오 ${audioTrack.enabled ? 'On' : 'Off'}`;
         }
       }
     }
