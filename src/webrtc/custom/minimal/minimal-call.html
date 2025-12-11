@@ -71,6 +71,9 @@
       }
     }
 
+    /**
+     * peer 객체 생성, MediaStream 준비(remote), ICE candidate 송신 cjfl
+     */
     function ensurePC() {
       if (pc) return;
       
@@ -80,6 +83,11 @@
       const remoteStream = new MediaStream();
       remoteVideo.srcObject = remoteStream;
 
+      /**
+       * 상대방이 보낸 audio/video track 수신 핸들러
+       * WebRTC는 track 단위로 데이터를 전송하므로
+       * 수신된 track을 remoteStream에 추가 → 화면에 표시됨
+       */
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
           event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -88,16 +96,25 @@
         }
       };
 
+      /**
+       * ICE 후보(candidates)가 생성될 때마다 호출되는 핸들러
+       * 연결 상대에게 candidate 정보를 WebSocket으로 전송하여
+       * NAT Traversal(방화벽 통과)을 가능하게 함
+       */
       pc.onicecandidate = (event) => {
         if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-          try {
-            ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
-          } catch (e) {
-            console.warn('candidate send failed', e);
-          }
+          ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
         }
       };
 
+      /**
+       * ICE 연결 상태 변화 핸들러
+       * - checking    : P2P 연결 시도 중
+       * - connected   : P2P 연결 완료
+       * - failed      : 연결 실패 (대개 네트워크 문제 or candidate 미수신)
+       * - disconnected/closed : 연결 종료
+       * 상태에 따라 UI 업데이트 및 통화 종료 처리
+       */
       pc.oniceconnectionstatechange = () => {
         console.log('ICE state:', pc.iceConnectionState);
 
@@ -123,8 +140,7 @@
       };
     }
 
-    // connectWss now returns a promise
-    function connectWss() {
+    async function connectWss() {
       return new Promise((resolve, reject) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           return resolve();
@@ -180,8 +196,6 @@
 
                   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-                  if (!localStream) await startLocalMedia(false);
-
                   const answer = await pc.createAnswer();
                   await pc.setLocalDescription(answer);
 
@@ -229,53 +243,75 @@
       });
     }
     
-    async function startLocalMedia(createOffer = true) {
-        try {
-          ensurePC();
+    /**
+     * 카메라/마이크 권한 요청
+     */
+    function checkMediaPermissions() {
+      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (cameraStatus.state === 'denied') throw new Error('카메라 권한을 확인해 주세요.');
+      if (microphoneStatus.state === 'denied') throw new Error('마이크 권한을 확인해 주세요.');
+    }
 
-          localVideo.srcObject = stream;
-          localStream = stream;
-
-          applyStatusToDOM('local', 'WAITING');
-          updateUiForState('waiting');
-          
-          stream.getTracks().forEach(track => {
-            if (!pc.getSenders().find(s => s.track === track)) {
-              pc.addTrack(track, stream);
-            }
-          });
-        } catch (e) {
-            applyStatusToDOM('local', 'ERROR', e.message);
-            console.error('카메라/마이크 접근 오류', e);
-            updateUiForState('idle');
-            throw e;
-        }
+    /**
+     * 로컬 미디어 장치 연결
+     */
+    async function getLocalMediaStream() {
+      try {
+        // 미디어 장치 확인
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (!stream) throw new Error('미디어 장치를 확인해 주세요.');
+        localStream = stream;
+        localVideo.srcObject = stream;
+        
+        stream.getTracks().forEach(track => {
+          if (!pc.getSenders().find(s => s.track === track)) {
+            pc.addTrack(track, stream);
+          }
+        });
+        
+        // UX 상태 업데이트
+        applyStatusToDOM('local', 'WAITING');
+        updateUiForState('waiting');
+      } catch (e) {
+        throw e;
+      }
     }
 
     /**
      * 통화 시작 이벤트
      */
     async function startCall() {
-      startCallBtn.disabled = true;
-
       try {
+        // 권한 확인
+        checkMediaPermissions();
+
+        // pc 연결
+        ensurePC();
+
+        // 미디어 연결
+        await getLocalMediaStream();
+
+        // 소켓 연결
         await connectWss();
         isCaller = true;
 
-        ensurePC();
-        await startLocalMedia(false); // Get media, but don't create an offer
-
+        // offer 생성
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
-        applyStatusToDOM('local', 'CONNECTING');
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
+        
+        // UX 상태 업데이트
+        applyStatusToDOM('local', 'CONNECTING');
+        updateUiForState('waiting');
       } catch (e) {
-        console.log('startCall failed', e);
+        // UX 상태 업데이트
+        applyStatusToDOM('local', 'ERROR', e.message);
+        updateUiForState('idle');
+        alert(`${e.message}`);
       }
     }
     
