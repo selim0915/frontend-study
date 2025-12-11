@@ -70,7 +70,6 @@ const CALL_STATUS = {
  * @param {string} status - 표시할 상태 문자열
  */
 window.applyStatusToDOM = function(target, statusKey, message) {
-
   try {
     var el = document.getElementById(target + "Status");
     if (!el) return;

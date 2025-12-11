@@ -12,12 +12,12 @@
     <div class="row">
       <div class="col">
         <h3>Local</h3>
-        <p class="status">상태: <span id="localStatus">-</span></p>
+        <p class="status">상태: <span id="localStatus">접속</span></p>
         <video id="localVideo" autoplay playsinline muted></video>
       </div>
       <div class="col">
         <h3>Remote</h3>
-        <p class="status">상태: <span id="remoteStatus">-</span></p>
+        <p class="status">상태: <span id="remoteStatus">접속</span></p>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
     </div>
@@ -45,28 +45,36 @@
     let pc = null;
     let localStream = null;
     let ws = null;
-    let pendingCandidates = [];
-    let isCaller = false;
-    let callState = 'idle';
 
     /**
-     * 연결 상태 UI 표시시
+     * 연결 상태 UI 표시
      */
-    function updateUiForState(state) {
-      callState = state;
+    function updateUiForState() {
+      const localState = document.getElementById('localStatus');
+      const state = localState.innerText;
+
       switch (state) {
-        case 'idle':
+        case '접속':
           startCallBtn.disabled = false;
           endCallBtn.disabled = true;
           toggleCameraBtn.disabled = true;
           toggleAudioBtn.disabled = true;
           break;
-        case 'waiting':
-        case 'incall':
+        case '대기':
+        case '연결중':
+        case '종료':
+          startCallBtn.disabled = true;
+          endCallBtn.disabled = true;
+          toggleCameraBtn.disabled = true;
+          toggleAudioBtn.disabled = true;
+          break;
+        case '통화중':
           startCallBtn.disabled = true;
           endCallBtn.disabled = false;
           toggleCameraBtn.disabled = false;
           toggleAudioBtn.disabled = false;
+          break;
+        case '오류':
           break;
       }
     }
@@ -78,7 +86,6 @@
       if (pc) return;
       
       pc = new RTCPeerConnection(configuration);
-      pendingCandidates = [];
 
       const remoteStream = new MediaStream();
       remoteVideo.srcObject = remoteStream;
@@ -109,37 +116,32 @@
 
       /**
        * ICE 연결 상태 변화 핸들러
-       * - checking    : P2P 연결 시도 중
-       * - connected   : P2P 연결 완료
-       * - failed      : 연결 실패 (대개 네트워크 문제 or candidate 미수신)
-       * - disconnected/closed : 연결 종료
-       * 상태에 따라 UI 업데이트 및 통화 종료 처리
        */
       pc.oniceconnectionstatechange = () => {
         console.log('ICE state:', pc.iceConnectionState);
 
         switch (pc.iceConnectionState) {
-          case 'checking':
-            applyStatusToDOM('local', 'CONNECTING');
+          case 'checking': // P2P 연결 시도 중
             break;
-          case 'connected':
-          case 'completed':
+          case 'connected': // P2P 연결 완료
+            debugger
             applyStatusToDOM('local', 'CONNECTED');
             applyStatusToDOM('remote', 'CONNECTED');
-            updateUiForState('incall');
+            updateUiForState();
             break;
-          case 'failed':
-            applyStatusToDOM('local', 'ERROR', 'ICE 연결 실패');
-            endCall();
-            break;
-          case 'disconnected':
-          case 'closed':
+          case 'failed': // 연결 실패
+          case 'disconnected': // 연결 종료
+          case 'closed': // 연결 종료
+            debugger
             endCall();
             break;
         }
       };
     }
 
+    /**
+     * 시그널링 서버 연결
+     */
     async function connectWss() {
       return new Promise((resolve, reject) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -158,42 +160,24 @@
           ws.onopen = () => {
             console.log('WebSocket connected');
 
+            applyStatusToDOM('local', 'CONNECTING');
+            updateUiForState();
             resolve();
           };
           ws.onclose = () => {
             console.log('WebSocket disconnected');
-
             ws = null; 
-            updateUiForState('idle');
           };
           ws.onerror = (e) => {
-            console.error('WS 연결 오류. 인증서 신뢰 또는 네트워크/방화벽을 확인하세요.');
-
-            ws = null;
-            updateUiForState('idle');
+            console.log('WebSocket error');
             reject(e);
           };
-    
           ws.onmessage = async (msg) => {
             try {
               const data = JSON.parse(msg.data);
 
               switch(data.type) {
                 case 'offer': {
-                  if (callState === 'incall') {
-                    console.log('이미 통화 중이라 offer 무시');
-                    return;
-                  }
-
-                  // signalingState !== 'stable' 이면 충돌 처리
-                  if (pc && pc.signalingState !== 'stable') {
-                    console.warn('offer collision: local offer 제거 후 incoming offer 처리');
-                    await pc.setLocalDescription({ type: 'rollback' });
-                  }
-
-                  ensurePC();
-                  isCaller = false;
-
                   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
 
                   const answer = await pc.createAnswer();
@@ -202,33 +186,14 @@
                   if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
                   }
-
-                  while (pendingCandidates.length) {
-                    const c = pendingCandidates.shift();
-                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){ console.warn('addIceCandidate failed', e); }
-                  }
                   break;
                 }
                 case 'answer': {
                   await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-
-                  while (pendingCandidates.length) {
-                    const c = pendingCandidates.shift();
-                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){ console.warn('addIceCandidate failed', e); }
-                  }
                   break;
                 }
                 case 'candidate': {
-                 if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-                    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); }
-                    catch(e){ console.warn('addIceCandidate failed', e); }
-                  } else {
-                    pendingCandidates.push(data.candidate);
-                  }
-                  break;
-                }
-                case 'hangup': {
-                  endCall();
+                  await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
                   break;
                 }
               }
@@ -246,18 +211,26 @@
     /**
      * 카메라/마이크 권한 요청
      */
-    function checkMediaPermissions() {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
+    async function checkMediaPermissions() {
+      try {
+        const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+        const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
-      if (cameraStatus.state === 'denied') throw new Error('카메라 권한을 확인해 주세요.');
-      if (microphoneStatus.state === 'denied') throw new Error('마이크 권한을 확인해 주세요.');
+        if (cameraStatus.state === 'denied') throw new Error('카메라 권한을 확인해 주세요.');
+        if (microphoneStatus.state === 'denied') throw new Error('마이크 권한을 확인해 주세요.');
+
+        // UX update
+        applyStatusToDOM('local', 'WAITING');
+        updateUiForState();
+      } catch (e) {
+        throw e;
+      }
     }
 
     /**
-     * 로컬 미디어 장치 연결
+     * 미디어 장치 연결
      */
-    async function getLocalMediaStream() {
+    async function getMediaStream() {
       try {
         // 미디어 장치 확인
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -270,10 +243,6 @@
             pc.addTrack(track, stream);
           }
         });
-        
-        // UX 상태 업데이트
-        applyStatusToDOM('local', 'WAITING');
-        updateUiForState('waiting');
       } catch (e) {
         throw e;
       }
@@ -285,17 +254,16 @@
     async function startCall() {
       try {
         // 권한 확인
-        checkMediaPermissions();
+        await checkMediaPermissions();
 
         // pc 연결
         ensurePC();
 
         // 미디어 연결
-        await getLocalMediaStream();
+        await getMediaStream();
 
         // 소켓 연결
         await connectWss();
-        isCaller = true;
 
         // offer 생성
         const offer = await pc.createOffer();
@@ -303,15 +271,12 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
-        
-        // UX 상태 업데이트
-        applyStatusToDOM('local', 'CONNECTING');
-        updateUiForState('waiting');
       } catch (e) {
-        // UX 상태 업데이트
-        applyStatusToDOM('local', 'ERROR', e.message);
-        updateUiForState('idle');
+        applyStatusToDOM('local', 'ERROR');
+        updateUiForState();
+
         alert(`${e.message}`);
+        throw e;
       }
     }
     
@@ -319,25 +284,37 @@
      * 통화 종료 이벤트
      */
     function endCall() {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'hangup' }));
-      }
+      try {
+        // 소켓 해제
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
 
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-      }
-      localVideo.srcObject = null;
-      remoteVideo.srcObject = null;
+        // pc 해제
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
 
-      applyStatusToDOM('local', 'IDLE');
-      applyStatusToDOM('remote', 'IDLE'); 
+        // 미디어 해제
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          localStream = null;
+        }
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
 
-      updateUiForState('idle');
+        // UX update
+        applyStatusToDOM('local', 'DISCONNECTED');
+        applyStatusToDOM('remote', 'DISCONNECTED');
+        updateUiForState();
+      } catch (e) {
+        applyStatusToDOM('local', 'ERROR');
+        updateUiForState();
+
+        alert(`${e.message}`);
+        throw e;
+      }
     }
 
     function toggleCamera() {
@@ -361,9 +338,7 @@
     }
     
     window.addEventListener('DOMContentLoaded', () => {
-      applyStatusToDOM('local', 'IDLE');
-      applyStatusToDOM('remote', 'IDLE');
-      updateUiForState('idle');
+      updateUiForState();
     });
 
     window.addEventListener('beforeunload', endCall);
