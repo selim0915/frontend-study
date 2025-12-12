@@ -3,32 +3,32 @@
 <head>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <script src="/src/webrtc/js/common/utils.js"></script>
-  <link rel="stylesheet" href="../../css/main.css">
+  <link rel="stylesheet" href="../../css/minimal.css">
 </head>
 <body>
-  <h2>Minimal-call</h2>
-
-  <div>
-    <div class="row">
-      <div class="col">
-        <h3>Local</h3>
-        <p class="status">상태: <span id="localStatus">접속</span></p>
-        <video id="localVideo" autoplay playsinline muted></video>
-      </div>
-      <div class="col">
-        <h3>Remote</h3>
-        <p class="status">상태: <span id="remoteStatus">접속</span></p>
+  <container>
+    <div class="status-pill">
+      <span id="statusText">IDLE</span>
+    </div>
+  
+    <div class="split-container">
+      <div class="video-box">
+        <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
+      <div class="video-box">
+        <div class="label">나 (Local)</div>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
     </div>
-
-    <div class="row">
-      <button id="startCallBtn" onclick="startCall()" disabled>통화 시작</button>
-      <button id="endCallBtn" onclick="endCall()" disabled>통화 종료</button>
-      <button id="toggleCameraBtn" onclick="toggleCamera()" disabled>카메라 On</button>
-      <button id="toggleAudioBtn" onclick="toggleAudio()" disabled>오디오 On</button>
+  
+    <div class="control-bar">
+      <button id="startCallBtn" class="btn-primary" onclick="startCall()">통화 시작</button>
+      <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" style="display:none">카메라 On</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" style="display:none">마이크 On</button>
     </div>
-  </div>
+  </container>
 
   <script>
     const localVideo = document.getElementById('localVideo');
@@ -39,42 +39,61 @@
     const toggleCameraBtn = document.getElementById('toggleCameraBtn');
     const toggleAudioBtn = document.getElementById('toggleAudioBtn');
 
-    const configuration = { iceServers: [] }; // LAN only
-    const wssUrl = `wss://192.168.2.95:3001`;
+    const elStatusText = document.getElementById('statusText');
+
+    const CONFIG = {
+      wssUrl: 'wss://192.168.2.95:3001',
+      logUrl: 'https://192.168.2.95:3000/log',
+      iceServers: { iceServers: [] },
+      connectTimeoutMs: 10000
+    };
 
     let pc = null;
     let localStream = null;
     let ws = null;
+    let connectTimer = null;
+    let _ws_state = WS_STATUS.IDLE.id;
+    Object.defineProperty(window, 'ws_state', {
+      get: function() { return _ws_state; },
+      set: function(val) {
+        _ws_state = val;
+        updateUiForState();
+      }
+    });
 
     /**
      * 연결 상태 UI 표시
      */
     function updateUiForState() {
-      const localState = document.getElementById('localStatus');
-      const state = localState.innerText;
+      const stateId = WS_STATUS[ws_state].id || '';
+      elStatusText.textContent = WS_STATUS[ws_state].label || '';
 
-      switch (state) {
-        case '접속':
-          startCallBtn.disabled = false;
-          endCallBtn.disabled = true;
-          toggleCameraBtn.disabled = true;
-          toggleAudioBtn.disabled = true;
+      switch (stateId) {
+        case WS_STATUS.CONNECTED.id:
+          startCallBtn.style.display = 'none';
+          endCallBtn.style.display = 'flex';
+          toggleAudioBtn.style.display = 'flex';
+          toggleCameraBtn.style.display = 'flex';
           break;
-        case '대기':
-        case '연결중':
-        case '종료':
-          startCallBtn.disabled = true;
-          endCallBtn.disabled = true;
-          toggleCameraBtn.disabled = true;
-          toggleAudioBtn.disabled = true;
+        case WS_STATUS.WAITING.id:
+        case WS_STATUS.CONNECTING.id:
+          startCallBtn.style.display = 'none';
+          endCallBtn.style.display = 'flex';
           break;
-        case '통화중':
-          startCallBtn.disabled = true;
-          endCallBtn.disabled = false;
-          toggleCameraBtn.disabled = false;
-          toggleAudioBtn.disabled = false;
+        case WS_STATUS.ERROR.id:
+        case WS_STATUS.DISCONNECTED.id:
+          startCallBtn.style.display = 'flex';
+          startCallBtn.textContent = '다시 연결';
+          endCallBtn.style.display = 'none';
+          toggleAudioBtn.style.display = 'none';
+          toggleCameraBtn.style.display = 'none';
           break;
-        case '오류':
+        case WS_STATUS.IDLE.id:
+        default:
+          startCallBtn.style.display = 'flex';
+          endCallBtn.style.display = 'none';
+          toggleAudioBtn.style.display = 'none';
+          toggleCameraBtn.style.display = 'none';
           break;
       }
     }
@@ -85,7 +104,7 @@
     function ensurePC() {
       if (pc) return;
       
-      pc = new RTCPeerConnection(configuration);
+      pc = new RTCPeerConnection(CONFIG.iceServers);
 
       const remoteStream = new MediaStream();
       remoteVideo.srcObject = remoteStream;
@@ -96,11 +115,24 @@
        * 수신된 track을 remoteStream에 추가 → 화면에 표시됨
        */
       pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
-        } else if (event.track) {
+        console.log('ontrack', event);
+        const stream = event.streams?.[0];
+
+        if (stream) {
+          stream.getTracks().forEach((t) => remoteStream.addTrack(t));
+        } else {
           remoteStream.addTrack(event.track);
         }
+
+        event.track.onmute = () => {
+          console.warn("Remote track muted → 수신 중단");
+          ws_state = WS_STATUS.DISCONNECTED.id;
+        };
+
+        event.track.onended = () => {
+          console.log('Remote track ended');
+          ws_state = WS_STATUS.DISCONNECTED.id;
+        };
       };
 
       /**
@@ -122,17 +154,15 @@
 
         switch (pc.iceConnectionState) {
           case 'checking': // P2P 연결 시도 중
+            ws_state = WS_STATUS.CONNECTING.id;
             break;
           case 'connected': // P2P 연결 완료
-            debugger
-            applyStatusToDOM('local', 'CONNECTED');
-            applyStatusToDOM('remote', 'CONNECTED');
-            updateUiForState();
+            ws_state = WS_STATUS.CONNECTED.id;
             break;
           case 'failed': // 연결 실패
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
-            debugger
+            ws_state = WS_STATUS.IDLE.id;
             endCall();
             break;
         }
@@ -155,21 +185,24 @@
         }
 
         try {
-          ws = new WebSocket(wssUrl);
+          ws = new WebSocket(CONFIG.wssUrl);
           
           ws.onopen = () => {
             console.log('WebSocket connected');
 
-            applyStatusToDOM('local', 'CONNECTING');
-            updateUiForState();
+            ws_state = WS_STATUS.CONNECTING.id;
             resolve();
           };
           ws.onclose = () => {
             console.log('WebSocket disconnected');
+
+            ws_state = WS_STATUS.DISCONNECTED.id;
             ws = null; 
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
+
+            ws_state = WS_STATUS.ERROR.id;
             reject(e);
           };
           ws.onmessage = async (msg) => {
@@ -219,9 +252,7 @@
         if (cameraStatus.state === 'denied') throw new Error('카메라 권한을 확인해 주세요.');
         if (microphoneStatus.state === 'denied') throw new Error('마이크 권한을 확인해 주세요.');
 
-        // UX update
-        applyStatusToDOM('local', 'WAITING');
-        updateUiForState();
+        ws_state = WS_STATUS.WAITING.id;
       } catch (e) {
         throw e;
       }
@@ -232,7 +263,6 @@
      */
     async function getMediaStream() {
       try {
-        // 미디어 장치 확인
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (!stream) throw new Error('미디어 장치를 확인해 주세요.');
         localStream = stream;
@@ -259,7 +289,7 @@
         // pc 연결
         ensurePC();
 
-        // 미디어 연결
+        // 로컬 미디어 연결
         await getMediaStream();
 
         // 소켓 연결
@@ -272,8 +302,7 @@
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR');
-        updateUiForState();
+        ws_state = WS_STATUS.ERROR.id;
 
         log('ERROR', e.message);
         alert(`${e.message}`);
@@ -286,32 +315,25 @@
      */
     function endCall() {
       try {
-        // 소켓 해제
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-
         // pc 해제
         if (pc) {
           pc.close();
           pc = null;
         }
 
-        // 미디어 해제
+        // 로컬 미디어 해제
         if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
           localStream = null;
         }
         localVideo.srcObject = null;
-        remoteVideo.srcObject = null;
 
-        // UX update
-        applyStatusToDOM('local', 'DISCONNECTED');
-        applyStatusToDOM('remote', 'DISCONNECTED');
-        updateUiForState();
+        // 소켓 해제
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR');
-        updateUiForState();
+        ws_state = WS_STATUS.ERROR.id;
 
         log('ERROR', e.message);
         alert(`${e.message}`);
@@ -338,12 +360,13 @@
         }
       }
     }
-    
-    window.addEventListener('DOMContentLoaded', () => {
-      updateUiForState();
-    });
 
-    window.addEventListener('beforeunload', endCall);
+    window.onload = () => {
+      updateUiForState();
+    };
+    window.onbeforeunload = () => {
+      endCall();
+    };
     window.onerror = (msg, url, line) => log('ERROR', `Global: ${msg} (${line})`);
   </script>
 </body>

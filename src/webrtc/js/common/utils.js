@@ -63,6 +63,14 @@ const CALL_STATUS = {
   DISCONNECTED:{ text: '종료', class: 'status-disconnected' },
   ERROR:       { text: '오류', class: 'status-error' },
 };
+const WS_STATUS = {
+  IDLE:        { id: 'IDLE',        label: '접속' },
+  WAITING:     { id: 'WAITING',     label: '대기' },
+  CONNECTING:  { id: 'CONNECTING',  label: '연결중' },
+  CONNECTED:   { id: 'CONNECTED',   label: '통화중' },
+  DISCONNECTED:{ id: 'DISCONNECTED',label: '종료' },
+  ERROR:       { id: 'ERROR',       label: '오류'},
+};
 
 /**
  * 상태값을 DOM에 반영하는 공통 함수
