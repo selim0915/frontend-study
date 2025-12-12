@@ -23,7 +23,7 @@
     </div>
   
     <div class="control-bar">
-      <button id="startCallBtn" class="btn-primary" onclick="startCall()">통화 시작</button>
+      <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" style="display:none">마이크 On</button>
@@ -69,21 +69,18 @@
       elStatusText.textContent = WS_STATUS[ws_state].label || '';
 
       switch (stateId) {
+        case WS_STATUS.WAITING.id:
+        case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
           startCallBtn.style.display = 'none';
           endCallBtn.style.display = 'flex';
           toggleAudioBtn.style.display = 'flex';
           toggleCameraBtn.style.display = 'flex';
           break;
-        case WS_STATUS.WAITING.id:
-        case WS_STATUS.CONNECTING.id:
-          startCallBtn.style.display = 'none';
-          endCallBtn.style.display = 'flex';
-          break;
-        case WS_STATUS.ERROR.id:
         case WS_STATUS.DISCONNECTED.id:
-          startCallBtn.style.display = 'flex';
+        case WS_STATUS.ERROR.id:
           startCallBtn.textContent = '다시 연결';
+          startCallBtn.style.display = 'flex';
           endCallBtn.style.display = 'none';
           toggleAudioBtn.style.display = 'none';
           toggleCameraBtn.style.display = 'none';
@@ -92,8 +89,8 @@
         default:
           startCallBtn.style.display = 'flex';
           endCallBtn.style.display = 'none';
-          toggleAudioBtn.style.display = 'none';
-          toggleCameraBtn.style.display = 'none';
+          toggleAudioBtn.style.display = 'flex';
+          toggleCameraBtn.style.display = 'flex';
           break;
       }
     }
@@ -289,11 +286,11 @@
         // pc 연결
         ensurePC();
 
-        // 로컬 미디어 연결
-        await getMediaStream();
-
         // 소켓 연결
         await connectWss();
+
+        // 로컬 미디어 연결
+        await getMediaStream();
 
         // offer 생성
         const offer = await pc.createOffer();
