@@ -275,6 +275,7 @@
         applyStatusToDOM('local', 'ERROR');
         updateUiForState();
 
+        log('ERROR', e.message);
         alert(`${e.message}`);
         throw e;
       }
@@ -312,6 +313,7 @@
         applyStatusToDOM('local', 'ERROR');
         updateUiForState();
 
+        log('ERROR', e.message);
         alert(`${e.message}`);
         throw e;
       }
@@ -342,6 +344,7 @@
     });
 
     window.addEventListener('beforeunload', endCall);
+    window.onerror = (msg, url, line) => log('ERROR', `Global: ${msg} (${line})`);
   </script>
 </body>
 </html>

@@ -91,3 +91,17 @@ window.applyStatusToDOM = function(target, statusKey, message) {
     console.error('[ERROR] applyStatusToDOM :', err);
   }
 };
+
+/** LOGGING */
+window.log = function(level, msg) {
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] [${level}] ${msg}`;
+  console.log(line);
+
+  fetch(CONFIG.logUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level, message: msg, timestamp })
+  })
+  .catch(e => console.error('[ERROR] log :', e));
+};
