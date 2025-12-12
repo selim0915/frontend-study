@@ -1,7 +1,7 @@
 const express = require("express");
 const path = require("path");
 const https = require("https");
-const { loadSSL } = require("../config/ssl");
+const { loadSSL } = require("./config/ssl");
 
 const app = express();
 const PORT = 3000;

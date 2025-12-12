@@ -2,7 +2,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
-const { loadSSL } = require("../config/ssl");
+const { loadSSL } = require("./config/ssl");
 
 const PORT = 3001;
 
