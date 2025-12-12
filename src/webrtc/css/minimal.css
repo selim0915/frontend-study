@@ -3,17 +3,26 @@
   --text: #fff;
 }
 
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   margin: 0 !important;
   padding: 0 !important;
   background: var(--bg-color);
   color: var(--text);
   font-family: system-ui, sans-serif;
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  max-width: none !important;
+}
+
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .status-pill {
@@ -36,7 +45,6 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
 }
 
 .label {
