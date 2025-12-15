@@ -24,24 +24,24 @@
   
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
-      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" style="display:none">마이크 On</button>
+      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
     </div>
   </div>
 
   <script>
+    const elStatusText = document.getElementById('statusText');
+
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
 
     const startCallBtn = document.getElementById('startCallBtn');
-    const retryBtn = document.getElementById('retryBtn');
     const endCallBtn = document.getElementById('endCallBtn');
     const toggleCameraBtn = document.getElementById('toggleCameraBtn');
     const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-
-    const elStatusText = document.getElementById('statusText');
+    const retryBtn = document.getElementById('retryBtn');
 
     const CONFIG = {
       wssUrl: 'wss://192.168.2.95:3001',
@@ -53,7 +53,6 @@
     let pc = null;
     let localStream = null;
     let ws = null;
-    let connectTimer = null;
     let _ws_state = WS_STATUS.IDLE.id;
     Object.defineProperty(window, 'ws_state', {
       get: function() { return _ws_state; },
@@ -101,7 +100,7 @@
     }
 
     /**
-     * peer 객체 생성, MediaStream 준비(remote), ICE candidate 송신 cjfl
+     * RTCPeerConnection(PC) 생성
      */
     function ensurePC() {
       if (pc) return;
@@ -204,7 +203,7 @@
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
-            handleError(e);
+            handleError(e, startCall);
             reject(e);
           };
           ws.onmessage = async (msg) => {
@@ -291,7 +290,7 @@
 
         ws_state = WS_STATUS.WAITING.id;
       } catch (e) {
-        handleError(e);
+        handleError(e, enterWaitingState);
       }
     }
 
@@ -313,7 +312,7 @@
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
       } catch (e) {
-        handleError(e);
+        handleError(e, startCall);
       }
     }
     
@@ -366,13 +365,27 @@
 
     /**
      * 공통 에러 핸들러
+     * @param {Error} e 에러 객체
+     * @param {Function} retryAction 재시도 시 실행할 함수 (옵션)
      */
-    function handleError(e) {
+    function handleError(e, retryAction) {
       ws_state = WS_STATUS.ERROR.id;
 
       const msg = e.message || e;
       alert(msg);
       log('ERROR', msg);
+
+      if (retryAction && typeof retryAction === 'function') {
+        retryBtn.onclick = async () => {
+          try {
+            await retryAction();
+          } catch (err) {
+            handleError(err, retryAction);
+          }
+        };
+      } else {
+        retryBtn.onclick = enterWaitingState; 
+      }
     }
 
     window.onload = () => {
