@@ -24,6 +24,7 @@
   
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
+      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" style="display:none">마이크 On</button>
@@ -35,6 +36,7 @@
     const remoteVideo = document.getElementById('remoteVideo');
 
     const startCallBtn = document.getElementById('startCallBtn');
+    const retryBtn = document.getElementById('retryBtn');
     const endCallBtn = document.getElementById('endCallBtn');
     const toggleCameraBtn = document.getElementById('toggleCameraBtn');
     const toggleAudioBtn = document.getElementById('toggleAudioBtn');
@@ -68,29 +70,32 @@
       const stateId = WS_STATUS[ws_state].id || '';
       elStatusText.textContent = WS_STATUS[ws_state].label || '';
 
+      startCallBtn.style.display = 'none';
+      retryBtn.style.display = 'none';
+      endCallBtn.style.display = 'none';
+      toggleAudioBtn.style.display = 'none';
+      toggleCameraBtn.style.display = 'none';
+
       switch (stateId) {
+        case WS_STATUS.IDLE.id:
+          break;
         case WS_STATUS.WAITING.id:
+          startCallBtn.textContent = '통화 시작';
+          startCallBtn.style.display = 'flex';
+          toggleAudioBtn.style.display = 'flex';
+          toggleCameraBtn.style.display = 'flex';
+          break;
         case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
-          startCallBtn.style.display = 'none';
           endCallBtn.style.display = 'flex';
           toggleAudioBtn.style.display = 'flex';
           toggleCameraBtn.style.display = 'flex';
           break;
-        case WS_STATUS.DISCONNECTED.id:
         case WS_STATUS.ERROR.id:
-          startCallBtn.textContent = '다시 연결';
-          startCallBtn.style.display = 'flex';
-          endCallBtn.style.display = 'none';
-          toggleAudioBtn.style.display = 'none';
-          toggleCameraBtn.style.display = 'none';
+          retryBtn.style.display = 'flex';
           break;
-        case WS_STATUS.IDLE.id:
+        case WS_STATUS.DISCONNECTED.id:
         default:
-          startCallBtn.style.display = 'flex';
-          endCallBtn.style.display = 'none';
-          toggleAudioBtn.style.display = 'flex';
-          toggleCameraBtn.style.display = 'flex';
           break;
       }
     }
@@ -102,6 +107,12 @@
       if (pc) return;
       
       pc = new RTCPeerConnection(CONFIG.iceServers);
+      
+      localStream.getTracks().forEach(track => {
+        if (!pc.getSenders().find(s => s.track === track)) {
+          pc.addTrack(track, localStream);
+        }
+      });
 
       const remoteStream = new MediaStream();
       remoteVideo.srcObject = remoteStream;
@@ -159,7 +170,6 @@
           case 'failed': // 연결 실패
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
-            ws_state = WS_STATUS.IDLE.id;
             endCall();
             break;
         }
@@ -186,20 +196,15 @@
           
           ws.onopen = () => {
             console.log('WebSocket connected');
-
-            ws_state = WS_STATUS.CONNECTING.id;
             resolve();
           };
           ws.onclose = () => {
             console.log('WebSocket disconnected');
-
-            ws_state = WS_STATUS.DISCONNECTED.id;
             ws = null; 
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
-
-            ws_state = WS_STATUS.ERROR.id;
+            handleError(e);
             reject(e);
           };
           ws.onmessage = async (msg) => {
@@ -242,16 +247,14 @@
      * 카메라/마이크 권한 요청
      */
     async function checkMediaPermissions() {
-      try {
-        const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-        const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
+      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
-        if (cameraStatus.state === 'denied') throw new Error('카메라 권한을 확인해 주세요.');
-        if (microphoneStatus.state === 'denied') throw new Error('마이크 권한을 확인해 주세요.');
-
-        ws_state = WS_STATUS.WAITING.id;
-      } catch (e) {
-        throw e;
+      if (cameraStatus.state === 'denied') {
+        throw new Error('카메라 권한을 확인해 주세요.');
+      }
+      if (microphoneStatus.state === 'denied') {
+        throw new Error('마이크 권한을 확인해 주세요.');
       }
     }
 
@@ -259,38 +262,49 @@
      * 미디어 장치 연결
      */
     async function getMediaStream() {
+      if (localStream) return;
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      const hasCamera = devices.some(d => d.kind === 'videoinput');
+      const hasMic = devices.some(d => d.kind === 'audioinput');
+
+      if (!hasCamera) {
+        throw new Error('연결된 카메라가 없습니다.');
+      }
+      if (!hasMic) {
+        throw new Error('연결된 마이크가 없습니다.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = stream;
+      localVideo.srcObject = stream;
+    }
+
+    /**
+     * 대기 상태 진입
+     */
+    async function enterWaitingState() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        if (!stream) throw new Error('미디어 장치를 확인해 주세요.');
-        localStream = stream;
-        localVideo.srcObject = stream;
-        
-        stream.getTracks().forEach(track => {
-          if (!pc.getSenders().find(s => s.track === track)) {
-            pc.addTrack(track, stream);
-          }
-        });
+        await checkMediaPermissions();
+        await getMediaStream();
+
+        ws_state = WS_STATUS.WAITING.id;
       } catch (e) {
-        throw e;
+        handleError(e);
       }
     }
 
     /**
-     * 통화 시작 이벤트
+     * 통화 연결 요청
      */
     async function startCall() {
       try {
-        // 권한 확인
-        await checkMediaPermissions();
-
         // pc 연결
         ensurePC();
 
         // 소켓 연결
         await connectWss();
-
-        // 로컬 미디어 연결
-        await getMediaStream();
 
         // offer 생성
         const offer = await pc.createOffer();
@@ -299,16 +313,12 @@
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
       } catch (e) {
-        ws_state = WS_STATUS.ERROR.id;
-
-        log('ERROR', e.message);
-        alert(`${e.message}`);
-        throw e;
+        handleError(e);
       }
     }
     
     /**
-     * 통화 종료 이벤트
+     * 통화 종료 요청
      */
     function endCall() {
       try {
@@ -330,11 +340,7 @@
           ws.close();
         }
       } catch (e) {
-        ws_state = WS_STATUS.ERROR.id;
-
-        log('ERROR', e.message);
-        alert(`${e.message}`);
-        throw e;
+        handleError(e);
       }
     }
 
@@ -358,8 +364,20 @@
       }
     }
 
+    /**
+     * 공통 에러 핸들러
+     */
+    function handleError(e) {
+      ws_state = WS_STATUS.ERROR.id;
+
+      const msg = e.message || e;
+      alert(msg);
+      log('ERROR', msg);
+    }
+
     window.onload = () => {
       updateUiForState();
+      enterWaitingState();
     };
     window.onbeforeunload = () => {
       endCall();
