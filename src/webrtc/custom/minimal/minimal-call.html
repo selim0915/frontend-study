@@ -25,8 +25,8 @@
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
-      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" style="display:none">카메라 On</button>
-      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" style="display:none">마이크 On</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleMedia('video')" style="display:none">카메라 On</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleMedia('audio')" style="display:none">마이크 On</button>
       <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
     </div>
   </div>
@@ -343,23 +343,22 @@
       }
     }
 
-    function toggleCamera() {
-      if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.enabled = !videoTrack.enabled;
-          toggleCameraBtn.textContent = `카메라 ${videoTrack.enabled ? 'On' : 'Off'}`;
-        }
-      }
-    }
+    /**
+     * 미디어 장치 제어
+     * @param {string} type 'video' | 'audio'
+     */
+    function toggleMedia(type) {
+      if (!localStream) return;
 
-    function toggleAudio() {
-      if (localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = !audioTrack.enabled;
-          toggleAudioBtn.textContent = `오디오 ${audioTrack.enabled ? 'On' : 'Off'}`;
-        }
+      const isVideo = type === 'video';
+      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
+      const track = tracks[0];
+
+      if (track) {
+        track.enabled = !track.enabled;
+        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
+        const label = isVideo ? '카메라' : '마이크';
+        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
       }
     }
 
