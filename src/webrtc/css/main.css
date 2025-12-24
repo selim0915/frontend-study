@@ -1,54 +1,53 @@
-/*
- *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
- *
- *  Use of this source code is governed by a BSD-style license
- *  that can be found in the LICENSE file in the root of the source
- *  tree.
- */
-.hidden {
-  display: none;
-}
-
-.highlight {
-  background-color: #eee;
-  font-size: 1.2em;
-  margin: 0 0 30px 0;
-  padding: 0.2em 1.5em;
-}
-
-.warning {
-  color: red;
-  font-weight: 400;
-}
-
-@media screen and (min-width: 1000px) {
-  /* hack! to detect non-touch devices */
-  div#links a {
-    line-height: 0.8em;
-  }
-}
-
-audio {
-  max-width: 100%;
-}
-
-body {
-  font-family: 'Roboto', sans-serif;
-  font-weight: 300;
+html, body, #app {
+  width: 100%;
+  height: 100%;
   margin: 0;
-  padding: 1em;
-  word-break: break-word;
+  padding: 0;
+  font-family: 'Roboto', system-ui, sans-serif;
+  background: var(--bg-color);
+  color: var(--text);
 }
 
 button {
-  padding: 0.5em 0.7em 0.6em 0.7em;
-  font-size: 0.8em;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 24px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  --bg: #ccc;
+  --color: #202124;
+  background: var(--bg);
+  color: var(--color);
+  transition: background 0.2s;
+}
+
+.btn-primary {
+  --bg: #8ab4f8;
+  --color: #202124;
+}
+
+.btn-danger {
+  --bg: #f28b82;
+  --color: #202124;
+}
+
+.btn-secondary {
+  --bg: #3c4043;
+  --color: #e8eaed;
 }
 
 button:hover {
-  background-color: #ccc;
+  background: color-mix(in srgb, var(--bg) 80%, black 20%);
+}
+
+button:disabled {
+  background: #000;
+  color: #444;
 }
 
 canvas {
@@ -63,13 +62,12 @@ code {
 }
 
 div#container {
-  margin: 0 auto 0 auto;
+  width: 100%;
   max-width: 60em;
-  padding: 1em 1.5em 1.3em 1.5em;
-}
-
-div#links {
-  padding: 0.5em 0 0 0;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 h1 {
@@ -175,12 +173,6 @@ div#errorMsg p {
   color: #F00;
 }
 
-div#links a {
-  display: block;
-  line-height: 1.3em;
-  margin: 0 0 1.5em 0;
-}
-
 div.outputSelector {
   margin: -1.3em 0 2em 0;
 }
@@ -205,6 +197,10 @@ video {
   background: #ccc;
   border: 1px solid #ccc;
   transform: scaleX(-1);
+}
+
+audio {
+  max-width: 100%;
 }
 
 ul {
@@ -263,3 +259,80 @@ fieldset > select {
 .status-connected { color: green; }
 .status-disconnected { color: red; }
 .status-error { color: red; font-weight: bold; }
+
+.warning {
+  color: red;
+  font-weight: 400;
+}
+
+.status-pill {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(32, 33, 36, 0.9);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 50;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.split-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  z-index: 5;
+  pointer-events: none;
+  color: white;
+}
+.video-box {
+  flex: 1;
+  position: relative;
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-bottom: 1px solid #444;
+  overflow: hidden;
+}
+
+.video-box video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  margin: 0 !important;
+  background: black !important;
+  border: none !important;
+  transform: none !important;
+}
+
+.video-box video#localVideo {
+  transform: scaleX(-1);
+}
+
+.control-bar {
+  height: 80px;
+  background: #202124;
+  border-top: 1px solid #3c4043;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+}

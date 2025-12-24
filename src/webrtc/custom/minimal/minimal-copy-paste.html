@@ -3,70 +3,88 @@
 <head>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <script src="/src/webrtc/js/common/utils.js"></script>
-  <link rel="stylesheet" href="../../css/main.css">
+</head>
+  <style>
+    :root {
+      --bg-color: #202124;
+      --text: #ffffff;
+    }
+  </style>
 </head>
 <body>
-  <h2>Minimal-copy-paste</h2>
+  <div id="container">
+    <div class="status-pill">
+      <div>Local: <span id="localStatus">IDLE</span></div>
+      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">Remote: <span id="remoteStatus">IDLE</span></div>
+    </div>
 
-  <div>
-    <div class="row">
-      <div class="col">
-        <h3>Local</h3>
-        <p class="status">상태: <span id="localStatus">-</span></p>
-        <video id="localVideo" autoplay playsinline muted></video>
-      </div>
-      <div class="col">
-        <h3>Remote</h3>
-        <p class="status">상태: <span id="remoteStatus">-</span></p>
+    <div class="split-container">
+      <div class="video-box">
+        <div class="label">Remote</div>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
-    </div>
-
-    <div class="row">
-      <button id="startCallBtn" onclick="startCall()">통화 연결</button>
-      <button id="endCallBtn" onclick="endCall(); disconnectWss();">통화 종료</button>
-      <button id="toggleCameraBtn" onclick="toggleCamera()">카메라 On/Off</button>
-      <button id="toggleAudioBtn" onclick="toggleAudio()">오디오 On/Off</button>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h3>수동 WebRTC 연결</h3>
-    <p class="sub-text">
-      - A에서 “Create Offer” 클릭 → A의 SDP에 Offer 텍스트 생성 및 복사<br/>
-      - A의 SDP Offer → B의 SDP에 붙여넣고 “Create Answer” 클릭 → B의 SDP에 Answer 텍스트 생성 및 복사<br/>
-      - B의 SDP Answer → A의 SDP에 붙여넣고 “Set Remote Answer” 클릭 → A의 ICE Candidates에 텍스트 생성 및 복사<br/>
-      - A의 ICE Candidates → B의 Remote ICE Candidates에 붙여넣고 “Add Remote ICE Candidates” 클릭<br/>
-    </p>
-
-    <div class="row">
-      <button class="createOffer" onclick="handleCreateOffer()" title="RTCPeerConnection을 만들고, 내 연결 저장를 담은 Offer(SDP)를 생성해 상대에게 보내기 위한 이벤트">Create Offer</button>
-      <button id="createAnswer" onclick="handleCreateAnswer()" title="상대가 보낸 Offer를 받아서, 내가 연결할 준비가 되었다는 Answer(SDP)를 생성하는 이벤트">Create Answer</button>
-      <button id="setRemoteAnswer" onclick="handleSetRemoteAnswer()" title="상대가 보낸 Answer(SDP)를 내 RTCPeerConnection에 적용하는 이벤트">Set Remote Answer</button>
-      <button id="addRemoteCandidates" onclick="handleAddRemoteCandidates()">Add Remote ICE Candidates</button>
-    </div>
-
-    <div class="row">
-      <div class="col">
-        <h4>SDP (Offer/Answer)</h4>
-        <button onclick="copyText('sdpBox')">복사</button>
-        <button onclick="pasteText('sdpBox')">붙여넣기</button>
-        <button onclick="clearText('sdpBox')">지우기</button>
-        <textarea id="sdpBox"></textarea>
+      <div class="video-box">
+        <div class="label">Local</div>
+        <video id="localVideo" autoplay playsinline muted></video>
       </div>
-      <div class="col">
-        <h4>ICE Candidates</h4>
-        <button onclick="copyText('localCandidatesBox')">복사</button>
-        <button onclick="pasteText('localCandidatesBox')">붙여넣기</button>
-        <button onclick="clearText('sdpBox')">지우기</button>
-        <textarea id="localCandidatesBox"></textarea>
+    </div>
+
+    <div class="control-bar">
+      <button id="startCallBtn" class="btn-primary" onclick="startCall()">통화 연결</button>
+      <button id="endCallBtn" class="btn-danger" onclick="endCall(); disconnectWss();" disabled>통화 종료</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" disabled>카메라</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" disabled>오디오</button>
+      <button class="btn-secondary" onclick="document.getElementById('manualPanel').style.display = 'block'">수동 설정</button>
+    </div>
+
+    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(32, 33, 36, 0.95); z-index: 100; overflow-y: auto; border: 1px solid #444; color: #fff; padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; margin-bottom: 15px; padding-bottom: 10px;">
+        <h3 style="margin: 0;">수동 WebRTC 연결</h3>
+        <button class="btn-secondary" style="height: 32px; padding: 0 16px;" onclick="document.getElementById('manualPanel').style.display = 'none'">닫기</button>
       </div>
-      <div class="col">
-        <h4>Remote ICE Candidates</h4>
-        <button onclick="copyText('remoteCandidatesBox')">복사</button>
-        <button onclick="pasteText('remoteCandidatesBox')">붙여넣기</button>
-        <button onclick="clearText('sdpBox')">지우기</button>
-        <textarea id="remoteCandidatesBox"></textarea>
+      
+      <p class="sub-text" style="color: #aaa;">
+        - A에서 “Create Offer” 클릭 → A의 SDP에 Offer 텍스트 생성 및 복사<br/>
+        - A의 SDP Offer → B의 SDP에 붙여넣고 “Create Answer” 클릭 → B의 SDP에 Answer 텍스트 생성 및 복사<br/>
+        - B의 SDP Answer → A의 SDP에 붙여넣고 “Set Remote Answer” 클릭 → A의 ICE Candidates에 텍스트 생성 및 복사<br/>
+        - A의 ICE Candidates → B의 Remote ICE Candidates에 붙여넣고 “Add Remote ICE Candidates” 클릭<br/>
+      </p>
+
+      <div class="row" style="margin: 20px 0;">
+        <button class="btn-primary" style="height: 40px;" onclick="handleCreateOffer()">Create Offer</button>
+        <button id="createAnswer" class="btn-primary" style="height: 40px;" onclick="handleCreateAnswer()">Create Answer</button>
+        <button id="setRemoteAnswer" class="btn-primary" style="height: 40px;" onclick="handleSetRemoteAnswer()">Set Remote Answer</button>
+        <button id="addRemoteCandidates" class="btn-primary" style="height: 40px;" onclick="handleAddRemoteCandidates()">Add Remote ICE Candidates</button>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <h4>SDP (Offer/Answer)</h4>
+          <div style="margin-bottom: 8px;">
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="copyText('sdpBox')">복사</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="pasteText('sdpBox')">붙여넣기</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="clearText('sdpBox')">지우기</button>
+          </div>
+          <textarea id="sdpBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+        </div>
+        <div class="col">
+          <h4>Local ICE Candidates</h4>
+          <div style="margin-bottom: 8px;">
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="copyText('localCandidatesBox')">복사</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="pasteText('localCandidatesBox')">붙여넣기</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="clearText('localCandidatesBox')">지우기</button>
+          </div>
+          <textarea id="localCandidatesBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+        </div>
+        <div class="col">
+          <h4>Remote ICE Candidates</h4>
+          <div style="margin-bottom: 8px;">
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="copyText('remoteCandidatesBox')">복사</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="pasteText('remoteCandidatesBox')">붙여넣기</button>
+            <button class="btn-secondary" style="height: 32px; display: inline-flex; vertical-align: middle;" onclick="clearText('remoteCandidatesBox')">지우기</button>
+          </div>
+          <textarea id="remoteCandidatesBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+        </div>
       </div>
     </div>
   </div>

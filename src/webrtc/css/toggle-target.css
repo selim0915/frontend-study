@@ -1,0 +1,23 @@
+#targetToggleBtn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    padding: 12px 20px;
+    border-radius: 30px;
+    border: none;
+    background-color: #1D6EEE;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    cursor: pointer;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+#targetToggleBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+}
+#targetToggleBtn.self-target {
+    background-color: #555;
+}
